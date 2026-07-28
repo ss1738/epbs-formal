@@ -49,6 +49,16 @@ Lifts the timed-PTC tally correctness (which `../specs/EPBSPTC.tla` checks at 3 
 | `no_false_present` | A present tally implies the payload really was timely. |
 | `no_false_absent` | A timely payload is always tallied present. |
 
+## `EPBSChain.v`: chain conservation, for all lengths
+
+Lifts the multi-slot conservation (which `../specs/EPBSChain.tla` checks at a bounded length) to a theorem for **any** sequence of slot outcomes and withdrawal drains, of any length.
+
+| Theorem | Meaning |
+|---|---|
+| `cstep_conserves` | Every event (full, empty, reorged, skipped, drain) conserves the proposer + builder + escrow total. |
+| `run_conserves` | The whole chain conserves the total, for any events and any length. |
+| `drained_settles` | Once all withdrawals have drained, the proposer and builder balances account for exactly the starting total. |
+
 ## No axioms
 
 None of the theorems in either file uses `Admitted`, `admit`, `Axiom`, or `Parameter`; the only imports are the standard library `ZArith` and the `lia` arithmetic decision procedure, which produces ordinary proof terms. A clean `coqc` exit is therefore a complete proof.
@@ -65,6 +75,7 @@ coqc EPBSPayment.v
 coqc EPBSForkChoice.v
 coqc EPBSEquivocation.v
 coqc EPBSCommittee.v
+coqc EPBSChain.v
 ```
 
 A clean exit and a generated `.vo` mean every theorem type-checked. Because there are no `Admitted` goals or axioms, that is a complete proof, not a partial one.

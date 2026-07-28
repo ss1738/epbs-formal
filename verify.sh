@@ -76,6 +76,7 @@ coq_check EPBSForkChoice.v
 coq_check EPBSEquivocation.v
 coq_check EPBSCommittee.v
 coq_check EPBSChain.v
+coq_check EPBSWeightPayment.v
 
 echo
 if [ "$fail" -eq 0 ]; then

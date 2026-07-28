@@ -14,7 +14,9 @@ Milestone 1 is done: the single-slot EIP-7732 model is written and has been chec
 
 Milestone 2 is under way: `specs/EPBSForkChoice.tla` adds an explicit payload-timeliness fork choice and measures the exact weight threshold at which a timely payload becomes reorg-safe. TLC confirms safety above the threshold and returns the reorg counterexample below it, while the payment guarantees hold on both sides. See `MILESTONE2.md`.
 
-Honest scope: a finite TLC run checks the properties on a small instance under the modeled adversary. It does not prove them for all builder counts or the full multi-slot fork choice. Those are milestones 2 (in progress) and 3.
+Milestone 3 has started: `coq/EPBSPayment.v` proves the payment core in Coq (the Rocq Prover) for **all** bid values, **all** balances, and **any** number of builders, not just a finite instance. Conservation, the G1 and G3 payment guarantees, no dangling escrow, and commitment binding are machine-checked theorems with no axioms or admitted goals. See `coq/README.md`.
+
+Honest scope: a finite TLC run checks the temporal and fork-choice properties on a small instance under the modeled adversary. The Coq proof generalizes the payment and binding core to all sizes. A full machine-checked proof of the consensus and fork-choice properties for all sizes is the remaining milestone-3 work.
 
 ## What it models
 
@@ -63,6 +65,8 @@ specs/EPBS.cfg                    its TLC configuration
 specs/EPBSForkChoice.tla          milestone 2: fork-choice / reorg-threshold model
 specs/EPBSForkChoice.cfg          safe parameters (payload never reorged)
 specs/EPBSForkChoice_attack.cfg   unsafe parameters (reorg counterexample)
+coq/EPBSPayment.v                 milestone 3: Coq proof of the payment core (all sizes)
+coq/README.md                     what the Coq development proves
 RESULTS.md                        the measured milestone-1 TLC run
 MILESTONE2.md                     the fork-choice result and reorg threshold
 PROPERTIES.md                     the milestone-1 invariant catalog

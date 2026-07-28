@@ -28,7 +28,8 @@ Re-check all properties against the refined model and publish deltas from milest
 **Deliverable.** A Coq (or equivalent) proof of the properties that a finite TLC run can only check on small instances, not prove in general.
 
 - Payment safety, no-steal, and conservation for any number of builders. **Done:** `coq/EPBSPayment.v` proves conservation (including over an arbitrary number of uninvolved builders), G1, G3, no dangling escrow, and commitment binding, all as axiom-free Coq theorems. See `coq/README.md`.
-- A machine-checked proof of the consensus and fork-choice properties (the reorg threshold, single-slot finality interactions) for all sizes. **Remaining.**
+- A machine-checked proof of the fork-choice reorg threshold for all weights. **Done:** `coq/EPBSForkChoice.v` proves timely-payload safety above the threshold, a reorg below it, and the exact iff characterization, all axiom-free.
+- A machine-checked proof of the full multi-slot temporal behavior (liveness across slots, single-slot-finality interactions). **Remaining.**
 
 TLC gives confidence on small instances; a proof gives a guarantee for all sizes. This milestone converts the strongest invariants from checked to proven.
 

@@ -16,10 +16,10 @@ A solo, self-contained delivery plan. Each milestone is a complete, publishable 
 
 **Deliverable.** A refinement that removes the milestone-1 abstractions:
 
-- Multi-slot history, so cross-slot reorg scenarios can be expressed.
-- A real fork-choice fragment (payload-timeliness boost) instead of the single `beaconCanonical` boolean.
-- Per-attester timed votes rather than one atomic PTC step.
-- An adversary that can choose its Byzantine set adaptively within the honest-majority bound.
+- A real fork-choice fragment (payload-timeliness boost) instead of the single `blockFate` choice. **Done:** `specs/EPBSForkChoice.tla` derives the block's fate from an accumulated-weight fork choice and measures the exact reorg threshold. See `MILESTONE2.md`.
+- Multi-slot history beyond two slots, so longer cross-slot reorg scenarios can be expressed. **Remaining.**
+- Per-attester timed votes rather than one atomic PTC step. **Remaining.**
+- An adversary that can choose its Byzantine set adaptively within the honest-majority bound. **Remaining.**
 
 Re-check all properties against the refined model and publish deltas from milestone 1.
 

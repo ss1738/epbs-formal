@@ -88,6 +88,8 @@ specs/EPBSChain.tla               multi-slot chain: queued withdrawals + livenes
 specs/EPBSChain.cfg               its TLC configuration (3 slots)
 specs/EPBSPTC.tla                 per-attester timed PTC votes; tally correctness
 specs/EPBSPTC.cfg                 its TLC configuration (3 attesters)
+specs/EPBSWeightPayment.tla       Gloas weight-quorum payment settlement
+specs/EPBSWeightPayment.cfg       its TLC configuration
 specs/EPBS_fault_*.cfg            non-vacuity self-tests (injected bugs TLC must catch)
 coq/EPBSPayment.v                 milestone 3: Coq proof of the payment core (all sizes)
 coq/EPBSForkChoice.v              milestone 3: Coq proof of the reorg threshold (all weights)

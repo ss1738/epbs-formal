@@ -59,6 +59,7 @@ tlc_green            "fork-choice (safe)"  EPBSForkChoice.cfg     EPBSForkChoice
 tlc_expect_violation "fork-choice (attack)" EPBSForkChoice_attack.cfg EPBSForkChoice.tla FC_TimelyPayloadSafe
 tlc_green            "multi-slot chain"    EPBSChain.cfg          EPBSChain.tla
 tlc_green            "timed PTC votes"     EPBSPTC.cfg            EPBSPTC.tla
+tlc_green            "weight-quorum payment" EPBSWeightPayment.cfg EPBSWeightPayment.tla
 
 echo "Larger instances (scaling evidence, see SCALING.md):"
 tlc_green            "single-slot (large)"  EPBS_large.cfg         EPBS.tla

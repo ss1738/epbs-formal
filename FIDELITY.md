@@ -4,9 +4,27 @@ A formal model is only as useful as its faithfulness to the thing it models. Thi
 
 ## Tracked spec revision
 
-The models track **EIP-7732 as published at eips.ethereum.org/EIPS/eip-7732**, read on **2026-07-28**: the roles (proposer, builder, PTC), the `SignedExecutionPayloadBid` / `SignedExecutionPayloadEnvelope` flow, deduction-at-inclusion with `BuilderPendingPayment` / `BuilderPendingWithdrawal`, the `payload_present` attestation with `PAYLOAD_TIMELY_THRESHOLD`, and the empty/full/skipped slot outcomes.
+The models were built from **EIP-7732 as published** (eips.ethereum.org/EIPS/eip-7732) and have been cross-checked against the live executable spec. In the `ethereum/consensus-specs` repository, ePBS has been promoted from a feature to a named fork, **Gloas** (`specs/gloas/`), the consensus-layer counterpart of the Glamsterdam upgrade. The cross-check below is against `specs/gloas/` at commit **`8a3df1d7`** (retrieved 2026-07-28): `beacon-chain.md`, `fork-choice.md`, `validator.md`.
 
-The consensus-specs implementation of ePBS evolves across devnets, and the fork-choice details there are more concrete than the EIP prose. If a specific consensus-specs revision (a commit or devnet tag) should be the reference instead, the models can be rebased onto it; the mapping tables below are the anchor points that would need re-checking.
+The abstractions in these models are faithful to the Gloas spec's structure (see the mapping and deltas below). A full rebase onto a specific pinned Gloas revision, tracking its exact functions and constants, is the natural next milestone; the anchor points that would need re-checking are listed below.
+
+## Mapping to the live Gloas spec
+
+| Model element | Gloas (`specs/gloas/`) counterpart |
+|---|---|
+| `ProposerInclude`, bid escrow (`pending`) | `process_execution_payload_bid`; `state.builder_pending_payments` |
+| Settlement to the proposer on a canonical block | `process_builder_pending_payments`; `state.builder_pending_withdrawals` (settled when attestation weight reaches quorum) |
+| PTC vote (`ptcVote`, `PayloadTimelyThreshold`) | `process_payload_attestation`; `payload_timeliness(store, root, timely)` against `PAYLOAD_TIMELY_THRESHOLD = PTC_SIZE // 2 = 256` (PTC_SIZE = 512) |
+| Fork-choice reorg (`weightB1` vs `weightReorg`, threshold) | `is_head_weak` (`head_weight < REORG_HEAD_WEIGHT_THRESHOLD`) and `is_parent_strong` (`parent_weight > REORG_PARENT_WEIGHT_THRESHOLD`) in `fork-choice.md` |
+| `payloadCanonical = committed` vs `none` | `should_build_on_full`; `PAYLOAD_STATUS_FULL` vs `PAYLOAD_STATUS_EMPTY` |
+| Affordability guard (`bal[b] >= v`) | `can_builder_cover_bid` (`builder_balance - min_balance >= bid_amount`) |
+
+## Deltas found against the live spec (stated honestly)
+
+- **PTC threshold is a concrete half-committee value.** Gloas fixes `PAYLOAD_TIMELY_THRESHOLD = PTC_SIZE // 2`. The model's `PayloadTimelyThreshold` is abstract, constrained to sit above the Byzantine count and at or below the honest count; that is faithful to a half-committee threshold exactly under an honest majority.
+- **Payment settles by attestation weight, not a boolean.** Gloas settles `builder_pending_payments` when accumulated attestation weight reaches quorum, and a non-canonical block simply never accrues that weight. The model abstracts this to escrow-at-inclusion with settle-on-canonical and revert-on-reorg. The two agree on the outcome and on conservation, but the model does not represent the weight-accumulation mechanism itself. This is the main abstraction a rebase would refine.
+- **No equivocation slashing is confirmed in the live spec.** Gloas defines no payload-equivocation or builder-equivocation slashing (proposer slashing only clears a pending payment). This validates the model's base choice (`SlashEquivocation = FALSE`) and the argument in `coq/EPBSEquivocation.v`.
+- **Fork-choice structure matches.** Gloas gates a withholding reorg on head-weakness and parent-strength weight thresholds, the same accumulated-weight comparison `EPBSForkChoice.tla` and `coq/EPBSForkChoice.v` model; Gloas leaves the exact numeric thresholds to committee fractions inherited from prior forks.
 
 ## Roles and data structures
 

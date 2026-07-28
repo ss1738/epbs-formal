@@ -61,6 +61,18 @@ Lifts the multi-slot conservation (which `../specs/EPBSChain.tla` checks at a bo
 | `drain_owed` | Applying k drains reduces the escrow by exactly k times the withdrawal amount. |
 | `drains_to_zero` | An escrow holding k withdrawals drains to zero in k steps (constructive liveness, all lengths). |
 
+## `EPBSWeightPayment.v`: weight-quorum payment, for all committee sizes
+
+Lifts the Gloas weight-quorum payment settlement (which `../specs/EPBSWeightPayment.tla` checks at finite instances) to a theorem for **all** committee sizes, under the honest-majority quorum `B < Q <= H`.
+
+| Theorem | Meaning |
+|---|---|
+| `paid_iff_canonical` | The payment settles exactly when the block is canonical; a Byzantine minority alone cannot reach quorum. |
+| `canonical_pays` | A canonical block pays the proposer the bid value (G1), for all sizes. |
+| `noncanonical_refunds` | A non-canonical block charges no one (G3), for all sizes. |
+| `no_forced_pay` | A Byzantine minority can never force a payment. |
+| `conservation` | Value is conserved whatever the outcome. |
+
 ## No axioms
 
 None of the theorems in either file uses `Admitted`, `admit`, `Axiom`, or `Parameter`; the only imports are the standard library `ZArith` and the `lia` arithmetic decision procedure, which produces ordinary proof terms. A clean `coqc` exit is therefore a complete proof.
@@ -78,6 +90,7 @@ coqc EPBSForkChoice.v
 coqc EPBSEquivocation.v
 coqc EPBSCommittee.v
 coqc EPBSChain.v
+coqc EPBSWeightPayment.v
 ```
 
 A clean exit and a generated `.vo` mean every theorem type-checked. Because there are no `Admitted` goals or axioms, that is a complete proof, not a partial one.

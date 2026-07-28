@@ -99,6 +99,7 @@ coq/EPBSChain.v                   Coq proof of chain conservation for all chain 
 coq/README.md                     what the Coq developments prove
 THREAT_MODEL.md                   adversary coverage matrix vs EIP-7732
 MUTATIONS.md                      non-vacuity: injected bugs are caught by the right invariant
+CHEATSHEET.md                     maps every proof/model to the Gloas spec element it validates
 FIDELITY.md                       how the models map to the real EIP-7732
 SCALING.md                        the properties hold at larger instances too
 specs/*_large.cfg                 larger TLC configurations (scaling evidence)

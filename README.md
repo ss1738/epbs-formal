@@ -12,7 +12,7 @@ Milestone 1 is done: the single-slot EIP-7732 model is written and has been chec
 - The three EIP-7732 guarantees (proposer unconditional payment, builder reveal safety, builder withhold safety) plus six structural invariants and a liveness property are defined (see `PROPERTIES.md`).
 - **TLC checked all of them green** on the finite instance in `specs/EPBS.cfg` (207 distinct states, search depth 8, no errors). The measured run is in `RESULTS.md`. Both the base spec and the optional equivocation-slashing mitigation pass.
 
-Milestone 2 is under way: `specs/EPBSForkChoice.tla` adds an explicit payload-timeliness fork choice and measures the exact weight threshold at which a timely payload becomes reorg-safe. TLC confirms safety above the threshold and returns the reorg counterexample below it, while the payment guarantees hold on both sides. See `MILESTONE2.md`. `specs/EPBSChain.tla` extends the payment lifecycle across a bounded chain of slots with EIP-7732's asynchronous, queued withdrawals, and TLC confirms conservation and liveness (every withdrawal drains) across the whole chain.
+Milestone 2 is under way: `specs/EPBSForkChoice.tla` adds an explicit payload-timeliness fork choice and measures the exact weight threshold at which a timely payload becomes reorg-safe. TLC confirms safety above the threshold and returns the reorg counterexample below it, while the payment guarantees hold on both sides. See `MILESTONE2.md`. `specs/EPBSChain.tla` extends the payment lifecycle across a bounded chain of slots with EIP-7732's asynchronous, queued withdrawals, and TLC confirms conservation and liveness (every withdrawal drains) across the whole chain. `specs/EPBSPTC.tla` refines the committee vote from one atomic step into individual, interleaved, timed attestations with lying or abstaining Byzantine members, and TLC proves the timed tally always equals the truth (so the atomic step is a sound abstraction).
 
 Milestone 3 is well under way, with two standalone Coq (Rocq Prover) developments that lift the strongest results from a finite instance to all sizes:
 
@@ -72,6 +72,8 @@ specs/EPBSForkChoice.cfg          safe parameters (payload never reorged)
 specs/EPBSForkChoice_attack.cfg   unsafe parameters (reorg counterexample)
 specs/EPBSChain.tla               multi-slot chain: queued withdrawals + liveness
 specs/EPBSChain.cfg               its TLC configuration (3 slots)
+specs/EPBSPTC.tla                 per-attester timed PTC votes; tally correctness
+specs/EPBSPTC.cfg                 its TLC configuration (3 attesters)
 coq/EPBSPayment.v                 milestone 3: Coq proof of the payment core (all sizes)
 coq/EPBSForkChoice.v              milestone 3: Coq proof of the reorg threshold (all weights)
 coq/README.md                     what the Coq developments prove

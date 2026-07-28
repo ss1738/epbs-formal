@@ -28,6 +28,17 @@ Lifts the fork-choice reorg threshold (which `../specs/EPBSForkChoice.tla` measu
 | `reorg_below_threshold` | Below the threshold, the worst-case adversary reorgs the timely payload (the threshold is tight, not just sufficient). |
 | `reorg_implies_adversary_heavy` | A reorg of a timely payload forces the adversary to strictly out-weigh the honest committee plus the payload boost. |
 
+## `EPBSEquivocation.v`: why no slashing is needed
+
+Formalizes EIP-7732's rationale for omitting equivocation slashing: equivocation is self-punishing.
+
+| Theorem | Meaning |
+|---|---|
+| `equivocation_pays_gets_nothing` | On a canonical block an equivocating builder pays the full bid and gets its payload excluded. |
+| `equivocation_net_loss` | Its net position is exactly minus the bid: a pure loss. |
+| `honest_dominates_equivocation` | When the payload has non-negative value, an honest reveal is at least as good as equivocating. |
+| `equivocation_strictly_worse` | With any positive payload value, equivocating is strictly worse than revealing honestly. |
+
 ## No axioms
 
 None of the theorems in either file uses `Admitted`, `admit`, `Axiom`, or `Parameter`; the only imports are the standard library `ZArith` and the `lia` arithmetic decision procedure, which produces ordinary proof terms. A clean `coqc` exit is therefore a complete proof.
@@ -42,6 +53,7 @@ The TLA+ models (`../specs/`) check these properties, plus the fork-choice and l
 # Requires Coq / the Rocq Prover (tested with Rocq 9.2). Each file is standalone.
 coqc EPBSPayment.v
 coqc EPBSForkChoice.v
+coqc EPBSEquivocation.v
 ```
 
 A clean exit and a generated `.vo` mean every theorem type-checked. Because there are no `Admitted` goals or axioms, that is a complete proof, not a partial one.

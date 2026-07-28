@@ -86,7 +86,9 @@ specs/EPBSPTC.tla                 per-attester timed PTC votes; tally correctnes
 specs/EPBSPTC.cfg                 its TLC configuration (3 attesters)
 coq/EPBSPayment.v                 milestone 3: Coq proof of the payment core (all sizes)
 coq/EPBSForkChoice.v              milestone 3: Coq proof of the reorg threshold (all weights)
+coq/EPBSEquivocation.v            Coq proof that equivocation is self-punishing (no slashing needed)
 coq/README.md                     what the Coq developments prove
+THREAT_MODEL.md                   adversary coverage matrix vs EIP-7732
 verify.sh                         one command that runs every check
 .github/workflows/verify.yml      CI: runs verify.sh on every push
 RESULTS.md                        the measured milestone-1 TLC run

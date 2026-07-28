@@ -63,6 +63,7 @@ tlc_green            "timed PTC votes"     EPBSPTC.cfg            EPBSPTC.tla
 echo "Coq proofs (coqc):"
 coq_check EPBSPayment.v
 coq_check EPBSForkChoice.v
+coq_check EPBSEquivocation.v
 
 echo
 if [ "$fail" -eq 0 ]; then

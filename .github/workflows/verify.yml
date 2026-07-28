@@ -1,0 +1,25 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Java (for TLC)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Coq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y coq
+
+      - name: Run all TLA+ model checks and Coq proofs
+        run: ./verify.sh

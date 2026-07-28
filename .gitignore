@@ -19,6 +19,9 @@ tlc-output/
 .*.aux
 .lia.cache
 
+# verify.sh tool cache
+.cache/
+
 # Editor / OS
 .DS_Store
 .idea/

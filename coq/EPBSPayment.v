@@ -18,8 +18,11 @@
     builders), the two payment guarantees G1 and G3, no dangling escrow, and
     payload commitment binding. Every theorem below is checked by [coqc]. *)
 
-From Stdlib Require Import ZArith.
-From Stdlib Require Import Lia.
+(* Plain [Require Import] for portability across Coq 8.x and the Rocq Prover
+   9.x. On 9.x this emits a harmless deprecation warning; it does not affect
+   the proofs. *)
+Require Import ZArith.
+Require Import Lia.
 Open Scope Z_scope.
 
 (** The choices the protocol and the adversary make. *)

@@ -1,5 +1,7 @@
 # ePBS Formal Model
 
+[![verify](https://github.com/ss1738/epbs-formal/actions/workflows/verify.yml/badge.svg)](https://github.com/ss1738/epbs-formal/actions/workflows/verify.yml)
+
 A machine-checkable formal model of **Enshrined Proposer-Builder Separation (ePBS)** as specified in **[EIP-7732](https://eips.ethereum.org/EIPS/eip-7732)**, the proposer/builder split that Ethereum's Glamsterdam upgrade brings into the consensus protocol itself.
 
 ePBS replaces out-of-protocol relays (MEV-Boost) with in-protocol rules governing how a proposer commits to a builder's block and how the builder is obligated to reveal it. Getting those rules wrong is a consensus-level risk that cannot be rolled back once shipped. This project models the EIP-7732 mechanism (the `SignedExecutionPayloadBid`, the `BuilderPendingPayment` deducted at inclusion, the PTC `payload_present` vote, and the canonical-versus-reorged settlement) and checks its three stated safety guarantees plus liveness, so problems are found before enshrinement rather than after.
@@ -58,6 +60,14 @@ Or open `specs/EPBS.tla` in the TLA+ Toolbox and run the model defined by `specs
 
 The configured instance is deliberately small (2 builders, 3 attesters, bid values {1, 2}) so the state space is fully enumerable.
 
+To reproduce every claim in this repository at once, run:
+
+```bash
+./verify.sh
+```
+
+It runs all four TLC models (the safe ones must pass; the attack config must produce its expected reorg counterexample) and both Coq proofs, and exits non-zero if anything is off. The same script runs in CI on every push (see the badge above).
+
 ## Why this project
 
 Ethereum's public roadmap lists ePBS (Glamsterdam) as a near-term L1 change. The Ethereum Foundation funds open-source research that strengthens the protocol's foundations, and formal verification of consensus changes is squarely in scope. This model is offered as a public good under the MIT license.
@@ -77,6 +87,8 @@ specs/EPBSPTC.cfg                 its TLC configuration (3 attesters)
 coq/EPBSPayment.v                 milestone 3: Coq proof of the payment core (all sizes)
 coq/EPBSForkChoice.v              milestone 3: Coq proof of the reorg threshold (all weights)
 coq/README.md                     what the Coq developments prove
+verify.sh                         one command that runs every check
+.github/workflows/verify.yml      CI: runs verify.sh on every push
 RESULTS.md                        the measured milestone-1 TLC run
 MILESTONE2.md                     the fork-choice result and reorg threshold
 PROPERTIES.md                     the milestone-1 invariant catalog

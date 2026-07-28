@@ -2,6 +2,12 @@
 
 A formal model is only as useful as its faithfulness to the thing it models. This document maps each modeling choice to the corresponding part of [EIP-7732](https://eips.ethereum.org/EIPS/eip-7732), so a reader can check that the model represents the spec rather than a convenient idealization. Where the model abstracts, the abstraction is stated.
 
+## Tracked spec revision
+
+The models track **EIP-7732 as published at eips.ethereum.org/EIPS/eip-7732**, read on **2026-07-28**: the roles (proposer, builder, PTC), the `SignedExecutionPayloadBid` / `SignedExecutionPayloadEnvelope` flow, deduction-at-inclusion with `BuilderPendingPayment` / `BuilderPendingWithdrawal`, the `payload_present` attestation with `PAYLOAD_TIMELY_THRESHOLD`, and the empty/full/skipped slot outcomes.
+
+The consensus-specs implementation of ePBS evolves across devnets, and the fork-choice details there are more concrete than the EIP prose. If a specific consensus-specs revision (a commit or devnet tag) should be the reference instead, the models can be rebased onto it; the mapping tables below are the anchor points that would need re-checking.
+
 ## Roles and data structures
 
 | Model element | EIP-7732 counterpart |

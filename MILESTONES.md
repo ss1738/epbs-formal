@@ -17,7 +17,7 @@ A solo, self-contained delivery plan. Each milestone is a complete, publishable 
 **Deliverable.** A refinement that removes the milestone-1 abstractions:
 
 - A real fork-choice fragment (payload-timeliness boost) instead of the single `blockFate` choice. **Done:** `specs/EPBSForkChoice.tla` derives the block's fate from an accumulated-weight fork choice and measures the exact reorg threshold. See `MILESTONE2.md`.
-- Multi-slot history beyond two slots, so longer cross-slot reorg scenarios can be expressed. **Remaining.**
+- Multi-slot history beyond two slots. **Done:** `specs/EPBSChain.tla` runs a bounded chain of slots with asynchronous, cross-slot withdrawal processing (EIP-7732's queued `BuilderPendingWithdrawal`), and TLC checks conservation and liveness (every queued withdrawal drains) across the whole chain.
 - Per-attester timed votes rather than one atomic PTC step. **Remaining.**
 - An adversary that can choose its Byzantine set adaptively within the honest-majority bound. **Remaining.**
 

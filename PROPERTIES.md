@@ -1,41 +1,52 @@
 # Property Catalog
 
-Every property below is defined in `specs/EPBS.tla` and listed in `specs/EPBS.cfg`. This file explains what each one means and why it matters for ePBS. All of them were checked green by TLC on the finite instance (see `RESULTS.md`); this checks them on a small instance, it does not prove them for all sizes (see `MILESTONES.md`).
+Every property below is defined in `specs/EPBS.tla` and listed in `specs/EPBS.cfg`. The model tracks EIP-7732. All properties were checked green by TLC on the finite instance (see `RESULTS.md`); this checks them on a small instance, it does not prove them for all sizes (see `MILESTONES.md`).
 
 ## Model in one paragraph
 
-One slot runs through `bidding -> proposing -> revealing -> attesting -> final`. Builders post bids. The proposer includes one bid, and the bid value is transferred from builder to proposer **at inclusion**, unconditionally. The included builder then reveals the committed payload, withholds it, or equivocates (reveals a different one). A Payload-Timeliness Committee (PTC) votes on whether a valid payload was seen on time; a Byzantine minority of the committee may lie. The vote is tallied, equivocation is slashed, and the canonical payload for the slot is resolved.
+One slot runs through `bidding -> proposing -> revealing -> attesting -> final`. Builders post `SignedExecutionPayloadBid`s. The proposer includes one bid; at that point the committed value is deducted from the builder's beacon-chain balance into a pending-payment escrow (EIP-7732's `BuilderPendingPayment`). The included builder then reveals the committed payload, withholds it, or equivocates. A Payload-Timeliness Committee (PTC) votes `payload_present`; a Byzantine minority may lie, but the `PayloadTimelyThreshold` is set so honest members alone decide the outcome. The beacon block is then either canonical or reorged. If canonical, the pending payment is finalized to the proposer (a `BuilderPendingWithdrawal`); if reorged, it is reverted to the builder.
 
-## Safety invariants
+## The three EIP-7732 guarantees
 
-| ID | Name | Statement | Why it matters |
-|---|---|---|---|
-| S1 | `INV_PaymentSafety` | If a bid was included, the proposer holds exactly the paid value, and that value is positive. | The proposer's compensation is real and definite once it does its job. |
-| S2 | `INV_NoStealFromProposer` | If the builder withheld or equivocated, the proposer still holds the payment. | A griefing builder cannot leave the proposer unpaid. This is the core reason ePBS pays on inclusion, not on reveal. |
-| S3 | `INV_CommitmentBinding` | A canonical payload is always the committed one. | A builder cannot substitute a different payload after the proposer commits. |
-| S4 | `INV_EquivocationRejected` | An equivocated payload never becomes canonical. | Equivocation cannot be used to force an unexpected block. |
-| S5 | `INV_EquivocationSlashed` | A builder that equivocated is slashed by the time the slot is final. | Misbehavior is penalized, not merely ignored. |
-| S6 | `INV_Conservation` | Proposer balance plus the sum of builder balances equals the starting total. | Payment is a pure transfer. No value is minted or burned by the mechanism. |
-| S7 | `INV_OnlyByzSlashed` | Only Byzantine builders are ever slashed. | An honest builder following the protocol is never punished. |
-| S8 | `INV_NoReorgOnWithhold` | Once a bid is included, the proposer's beacon block stays canonical. | A withholding builder yields an empty payload, but does not reorg the proposer out. |
-
-## Liveness properties
+These are the safety guarantees EIP-7732 states for itself, modeled directly.
 
 | ID | Name | Statement | Why it matters |
 |---|---|---|---|
-| L1 | `LIVE_Progress` | The slot eventually reaches `final`. | The chain makes progress even under builder failure. |
-| L2 | `LIVE_HonestRevealCanonical` | Whenever the committed payload is revealed on time, it eventually becomes canonical. | Under an honest PTC majority, honest work is not dropped. L2 depends on the `HonestMajority` assumption in the model. |
+| G1 | `INV_G1_ProposerUnconditionalPayment` | A canonical beacon block that included a bid pays the proposer the full committed value, whatever the builder did with the payload. | The proposer is paid for doing its job even if the builder withholds or equivocates. |
+| G2 | `INV_G2_BuilderRevealSafety` | An honest, timely reveal on a canonical block, attested present by the PTC, becomes the canonical payload. | Honest builder work is not dropped under an honest PTC majority. |
+| G3 | `INV_G3_BuilderWithholdSafety` | If the beacon block is not canonical (withheld or reorged), the builder is not charged and the proposer is not paid. | A builder whose block is reorged out does not lose its bid. |
+
+## Structural safety
+
+| Name | Statement | Why it matters |
+|---|---|---|
+| `INV_CommitmentBinding` | A canonical payload is always the committed one. | A builder cannot substitute a different payload after commitment. |
+| `INV_EquivocationNotCanonical` | An equivocated payload never becomes canonical. | Equivocation cannot force an unexpected block. |
+| `INV_Conservation` | Proposer balance plus builder balances plus the pending escrow equals the starting total. | Payment is a pure transfer; nothing is minted or burned. |
+| `INV_NoDanglingPayment` | Once the slot is final, the pending escrow is zero. | Every pending payment is either finalized or reverted; none is stuck. |
+| `INV_SlashingFaithful` | With slashing off (base EIP-7732) nobody is slashed; when the optional mitigation is on, only a Byzantine equivocator is. | Faithful to the EIP's actual choice, and lets the proposed mitigation be checked. |
+
+## Liveness
+
+| ID | Name | Statement | Why it matters |
+|---|---|---|---|
+| L1 | `LIVE_Progress` | The slot eventually reaches `final`. | The chain makes progress even under builder or reveal failure. |
+
+## Fidelity note: no equivocation slashing in the base spec
+
+EIP-7732 deliberately has **no penalty for payload equivocation**. Revealing a second, withheld payload splits the view at a cost to the builder (the revealed payload may not be included), and the EIP opted for that simplicity over a slashing rule. This model reflects it: `SlashEquivocation = FALSE` is the base spec. The EIP notes an optional mitigation to add equivocation slashing; setting `SlashEquivocation = TRUE` checks that variant against the same properties. Both pass on the instance.
 
 ## Assumptions (stated in the model)
 
-- `HonestMajority`: strictly fewer than half the PTC members are Byzantine.
-- `ByzBuilders` / `ByzAttesters`: the adversary is a fixed subset of participants, chosen before the slot.
-- The fork-choice rule and multi-slot history are abstracted to `beaconCanonical` and a single-slot `canonical` value. Milestone 2 refines these.
+- `ThresholdOK`: `PayloadTimelyThreshold` is above the Byzantine PTC count and at or below the honest PTC count, so a Byzantine minority cannot fake "present" and the honest members can always reach it. This is the honest-majority margin EIP-7732 describes.
+- `ByzBuilders` / `ByzAttesters`: the adversary is a fixed subset, chosen before the slot.
+- The fork choice and multi-slot history are abstracted to `blockFate` (canonical vs reorged). Milestone 2 refines this.
 
 ## Known limitations of the milestone-1 model
 
-- Single slot. Cross-slot reorg scenarios (for example, a late payload competing across a slot boundary) are out of scope until milestone 2.
+- Single slot. Cross-slot reorg scenarios are out of scope until milestone 2.
 - The PTC votes in one atomic step rather than as individually timed messages.
-- Payment is modeled as integer balances, not the full beacon-state accounting.
+- Payment is modeled as integer balances and a single pending escrow, not the full beacon-state `builder_pending_payments` / `builder_pending_withdrawals` lists.
+- `blockFate` is chosen nondeterministically rather than derived from a modeled fork-choice rule. Deriving it from a payload-timeliness fork-choice fragment is a milestone-2 target.
 
-These are deliberate abstractions to keep the state space enumerable for a first pass. Each is listed as a refinement target in `MILESTONES.md`.
+These are deliberate abstractions to keep the state space enumerable for a first pass.

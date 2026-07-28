@@ -1,16 +1,16 @@
 # ePBS Formal Model
 
-A machine-checkable formal model of **Enshrined Proposer-Builder Separation (ePBS)**, the proposer/builder split that Ethereum's Glamsterdam upgrade brings into the consensus protocol itself.
+A machine-checkable formal model of **Enshrined Proposer-Builder Separation (ePBS)** as specified in **[EIP-7732](https://eips.ethereum.org/EIPS/eip-7732)**, the proposer/builder split that Ethereum's Glamsterdam upgrade brings into the consensus protocol itself.
 
-ePBS replaces out-of-protocol relays (MEV-Boost) with in-protocol rules governing how a proposer commits to a builder's block and how the builder is obligated to reveal it. Getting those rules wrong is a consensus-level risk that cannot be rolled back once shipped. This project states the safety and liveness properties precisely and checks them, so problems are found before enshrinement rather than after.
+ePBS replaces out-of-protocol relays (MEV-Boost) with in-protocol rules governing how a proposer commits to a builder's block and how the builder is obligated to reveal it. Getting those rules wrong is a consensus-level risk that cannot be rolled back once shipped. This project models the EIP-7732 mechanism (the `SignedExecutionPayloadBid`, the `BuilderPendingPayment` deducted at inclusion, the PTC `payload_present` vote, and the canonical-versus-reorged settlement) and checks its three stated safety guarantees plus liveness, so problems are found before enshrinement rather than after.
 
 ## Status
 
-Milestone 1 is done: the single-slot model is written and has been checked with TLC.
+Milestone 1 is done: the single-slot EIP-7732 model is written and has been checked with TLC.
 
-- `specs/EPBS.tla` is a complete single-slot TLA+ model: bidding, unconditional payment on inclusion, builder reveal / withhold / equivocate, a Payload-Timeliness Committee (PTC) vote with a Byzantine minority, tally, slashing, and canonical-payload resolution.
-- Eight safety invariants and two liveness properties are defined (see `PROPERTIES.md`).
-- **TLC checked all of them green** on the finite instance in `specs/EPBS.cfg` (159 distinct states, search depth 8, no errors). The measured run is in `RESULTS.md`.
+- `specs/EPBS.tla` is a complete single-slot TLA+ model: bidding, payment deducted from the builder at inclusion, builder reveal / withhold / equivocate, a Payload-Timeliness Committee (PTC) vote with a Byzantine minority and a timeliness threshold, canonical-versus-reorged settlement, and pending-payment finalize-or-revert.
+- The three EIP-7732 guarantees (proposer unconditional payment, builder reveal safety, builder withhold safety) plus six structural invariants and a liveness property are defined (see `PROPERTIES.md`).
+- **TLC checked all of them green** on the finite instance in `specs/EPBS.cfg` (207 distinct states, search depth 8, no errors). The measured run is in `RESULTS.md`. Both the base spec and the optional equivocation-slashing mitigation pass.
 
 Honest scope: a finite TLC run checks the properties on a small instance under the modeled adversary. It does not prove them for all builder counts or the full multi-slot fork choice. Those are milestones 2 and 3.
 
@@ -26,12 +26,15 @@ The safety questions it targets:
 
 | Property | Plain-language question |
 |---|---|
-| Payment safety | Is the proposer paid even if the builder never reveals? |
+| Proposer unconditional payment (G1) | Is the proposer paid even if the builder never reveals? |
+| Builder reveal safety (G2) | Is an honest, timely payload actually included under an honest PTC? |
+| Builder withhold safety (G3) | If the block is reorged out, is the builder spared the charge? |
 | Commitment binding | Can a builder swap in a different payload after inclusion? |
-| Equivocation slashing | Is a builder that reveals a non-committed payload slashed, and that payload rejected? |
-| No reorg on withhold | Does a withholding builder unwind the proposer's beacon block? |
+| Equivocation not canonical | Can an equivocated payload become the canonical one? |
 | Conservation | Is payment a pure transfer, with nothing minted or burned? |
-| Liveness | Does the slot always terminate, and does an honest timely reveal always become canonical? |
+| Liveness | Does the slot always terminate? |
+
+Note on fidelity: EIP-7732 deliberately has **no slashing** for payload equivocation. The model reflects that (slashing off by default), and includes the EIP's optional slashing mitigation behind a constant so both can be checked. See `PROPERTIES.md`.
 
 ## Running it
 
@@ -55,6 +58,7 @@ Ethereum's public roadmap lists ePBS (Glamsterdam) as a near-term L1 change. The
 ```
 specs/EPBS.tla     the model
 specs/EPBS.cfg     the TLC configuration (small finite instance)
+RESULTS.md         the measured TLC run
 PROPERTIES.md      the full catalog of invariants and temporal properties
 MILESTONES.md      the delivery plan
 PROPOSAL.md        the grant / office-hours brief

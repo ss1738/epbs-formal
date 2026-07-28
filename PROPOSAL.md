@@ -8,11 +8,13 @@ An open-source, machine-checkable formal model of Enshrined Proposer-Builder Sep
 
 ## The problem
 
-ePBS moves the proposer/builder split out of relays (MEV-Boost) and into the Ethereum protocol. That is a change to how blocks are proposed at layer 1. A subtle error, for example a way for a builder to be paid without revealing, to grief a proposer, or to substitute a payload after commitment, is catastrophic and cannot be rolled back once shipped. The natural time to catch such errors is while the spec is still being finalized.
+ePBS (EIP-7732) moves the proposer/builder split out of relays (MEV-Boost) and into the Ethereum protocol. That is a change to how blocks are proposed at layer 1. A subtle error, for example a way for a builder to be paid without revealing, to grief a proposer, or to substitute a payload after commitment, is catastrophic and cannot be rolled back once shipped. The natural time to catch such errors is while the spec is still being finalized.
 
 ## What this delivers
 
-A TLA+ model of one ePBS slot with an explicit adversary (Byzantine builders that withhold or equivocate, a Byzantine PTC minority that lies), and a catalog of eight safety invariants and two liveness properties, checked with the TLC model checker. See `PROPERTIES.md`. The strongest invariants are then proven for all instance sizes in a follow-on milestone.
+A TLA+ model of one EIP-7732 slot with an explicit adversary (Byzantine builders that withhold or equivocate, a Byzantine PTC minority that lies, and a beacon block that may be canonical or reorged), with the three safety guarantees EIP-7732 states for itself, six structural invariants, and a liveness property, all checked with the TLC model checker. Milestone 1 is already done and green (207 states, no errors; see `RESULTS.md`). The strongest guarantees are then proven for all instance sizes in a follow-on milestone.
+
+The model is faithful to a subtle EIP-7732 design choice: the base protocol has no slashing for payload equivocation. That choice is modeled as-is, with the EIP's optional slashing mitigation available behind a constant so both can be checked.
 
 The properties include:
 

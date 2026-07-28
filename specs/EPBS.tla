@@ -53,11 +53,21 @@ CONSTANTS
 
 CONSTANTS NONE
 
+\* Fault-injection flags for non-vacuity self-tests. FALSE in every real
+\* configuration, so the model is unchanged there. They are set TRUE only in
+\* specs/EPBS_fault_*.cfg to inject a known bug and confirm TLC catches it with
+\* the right invariant, proving the invariants are not vacuously true. See
+\* MUTATIONS.md.
+CONSTANTS
+    FaultStealOnReorg,  \* TRUE: a reorged block pays the proposer (should violate G3)
+    FaultBindingBug     \* TRUE: a canonical block always marks the payload committed (should violate binding)
+
 ASSUME ByzBuildersOK  == ByzBuilders  \subseteq Builders
 ASSUME ByzAttestersOK == ByzAttesters \subseteq Attesters
 ASSUME ValuesPositive == \A v \in Values : v > 0
 ASSUME StartBalOK     == StartBal \in Nat /\ StartBal > 0
 ASSUME SlashFlagOK    == SlashEquivocation \in BOOLEAN
+ASSUME FaultFlagsOK   == FaultStealOnReorg \in BOOLEAN /\ FaultBindingBug \in BOOLEAN
 
 \* Threshold is set so that a Byzantine PTC minority alone cannot force
 \* "present" (threshold > Byzantine count), and the honest members alone can
@@ -214,9 +224,12 @@ Finalize ==
                /\ IF fate = "canonical"
                   THEN /\ bal' = [bal EXCEPT !["proposer"] = @ + pending]
                        /\ payloadCanonical' =
-                            IF reveal = "committed" /\ result = "present"
-                            THEN "committed" ELSE "none"
-                  ELSE /\ bal' = [bal EXCEPT ![included] = @ + pending]
+                            IF FaultBindingBug THEN "committed"
+                            ELSE IF reveal = "committed" /\ result = "present"
+                                 THEN "committed" ELSE "none"
+                  ELSE /\ bal' = IF FaultStealOnReorg
+                                 THEN [bal EXCEPT !["proposer"] = @ + pending]
+                                 ELSE [bal EXCEPT ![included] = @ + pending]
                        /\ payloadCanonical' = "none"
     /\ pending' = 0
     /\ slashed' = IF SlashEquivocation /\ reveal = "equivocated"

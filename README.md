@@ -23,6 +23,8 @@ Milestone 3 is well under way, with two standalone Coq (Rocq Prover) development
 
 All are machine-checked theorems with no axioms or admitted goals. See `coq/README.md`.
 
+The invariants are shown to have teeth, not to pass vacuously: `specs/EPBS_fault_*.cfg` inject known bugs and TLC catches each with the right invariant (a reorged block that pays the proposer violates G3; a canonical block that always marks the payload committed violates commitment binding). See `MUTATIONS.md`.
+
 Honest scope: the finite TLC runs check the temporal behavior and the adversary on small instances; the Coq proofs generalize the payment, binding, and reorg-threshold results to all sizes. Remaining milestone-3 work is a machine-checked proof of the full multi-slot temporal behavior (liveness across slots, single-slot-finality interactions).
 
 ## What it models
@@ -84,11 +86,13 @@ specs/EPBSChain.tla               multi-slot chain: queued withdrawals + livenes
 specs/EPBSChain.cfg               its TLC configuration (3 slots)
 specs/EPBSPTC.tla                 per-attester timed PTC votes; tally correctness
 specs/EPBSPTC.cfg                 its TLC configuration (3 attesters)
+specs/EPBS_fault_*.cfg            non-vacuity self-tests (injected bugs TLC must catch)
 coq/EPBSPayment.v                 milestone 3: Coq proof of the payment core (all sizes)
 coq/EPBSForkChoice.v              milestone 3: Coq proof of the reorg threshold (all weights)
 coq/EPBSEquivocation.v            Coq proof that equivocation is self-punishing (no slashing needed)
 coq/README.md                     what the Coq developments prove
 THREAT_MODEL.md                   adversary coverage matrix vs EIP-7732
+MUTATIONS.md                      non-vacuity: injected bugs are caught by the right invariant
 FIDELITY.md                       how the models map to the real EIP-7732
 SCALING.md                        the properties hold at larger instances too
 specs/*_large.cfg                 larger TLC configurations (scaling evidence)

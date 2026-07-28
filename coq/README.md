@@ -39,6 +39,16 @@ Formalizes EIP-7732's rationale for omitting equivocation slashing: equivocation
 | `honest_dominates_equivocation` | When the payload has non-negative value, an honest reveal is at least as good as equivocating. |
 | `equivocation_strictly_worse` | With any positive payload value, equivocating is strictly worse than revealing honestly. |
 
+## `EPBSCommittee.v`: PTC tally correctness, for all committee sizes
+
+Lifts the timed-PTC tally correctness (which `../specs/EPBSPTC.tla` checks at 3 and 5 attesters) to a theorem for **all** committee sizes, under the honest-majority threshold `B < T <= H`.
+
+| Theorem | Meaning |
+|---|---|
+| `tally_correct` | The present-count tally equals the truth for any number of honest and Byzantine attesters and any Byzantine behaviour. |
+| `no_false_present` | A present tally implies the payload really was timely. |
+| `no_false_absent` | A timely payload is always tallied present. |
+
 ## No axioms
 
 None of the theorems in either file uses `Admitted`, `admit`, `Axiom`, or `Parameter`; the only imports are the standard library `ZArith` and the `lia` arithmetic decision procedure, which produces ordinary proof terms. A clean `coqc` exit is therefore a complete proof.
@@ -54,6 +64,7 @@ The TLA+ models (`../specs/`) check these properties, plus the fork-choice and l
 coqc EPBSPayment.v
 coqc EPBSForkChoice.v
 coqc EPBSEquivocation.v
+coqc EPBSCommittee.v
 ```
 
 A clean exit and a generated `.vo` mean every theorem type-checked. Because there are no `Admitted` goals or axioms, that is a complete proof, not a partial one.

@@ -68,6 +68,7 @@ echo "Coq proofs (coqc):"
 coq_check EPBSPayment.v
 coq_check EPBSForkChoice.v
 coq_check EPBSEquivocation.v
+coq_check EPBSCommittee.v
 
 echo
 if [ "$fail" -eq 0 ]; then

@@ -11,6 +11,14 @@ _build/
 tlc-output/
 *.dot
 
+# Coq / Rocq build artifacts
+*.vo
+*.vok
+*.vos
+*.glob
+.*.aux
+.lia.cache
+
 # Editor / OS
 .DS_Store
 .idea/

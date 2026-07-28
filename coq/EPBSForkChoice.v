@@ -28,8 +28,11 @@
     payload's liveness, not the builder's funds. This file is standalone and
     depends only on the standard library. *)
 
-From Stdlib Require Import ZArith.
-From Stdlib Require Import Lia.
+(* Plain [Require Import] for portability across Coq 8.x and the Rocq Prover
+   9.x. On 9.x this emits a harmless deprecation warning; it does not affect
+   the proofs. *)
+Require Import ZArith.
+Require Import Lia.
 Open Scope Z_scope.
 
 Section ForkChoice.

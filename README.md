@@ -14,9 +14,14 @@ Milestone 1 is done: the single-slot EIP-7732 model is written and has been chec
 
 Milestone 2 is under way: `specs/EPBSForkChoice.tla` adds an explicit payload-timeliness fork choice and measures the exact weight threshold at which a timely payload becomes reorg-safe. TLC confirms safety above the threshold and returns the reorg counterexample below it, while the payment guarantees hold on both sides. See `MILESTONE2.md`.
 
-Milestone 3 has started: `coq/EPBSPayment.v` proves the payment core in Coq (the Rocq Prover) for **all** bid values, **all** balances, and **any** number of builders, not just a finite instance. Conservation, the G1 and G3 payment guarantees, no dangling escrow, and commitment binding are machine-checked theorems with no axioms or admitted goals. See `coq/README.md`.
+Milestone 3 is well under way, with two standalone Coq (Rocq Prover) developments that lift the strongest results from a finite instance to all sizes:
 
-Honest scope: a finite TLC run checks the temporal and fork-choice properties on a small instance under the modeled adversary. The Coq proof generalizes the payment and binding core to all sizes. A full machine-checked proof of the consensus and fork-choice properties for all sizes is the remaining milestone-3 work.
+- `coq/EPBSPayment.v` proves the payment core for **all** bid values, **all** balances, and **any** number of builders: conservation, the G1 and G3 payment guarantees, no dangling escrow, and commitment binding.
+- `coq/EPBSForkChoice.v` proves the reorg threshold for **all** non-negative weights: a timely payload is canonical against any adversary above the threshold, is reorged by the worst-case adversary below it, and the exact iff characterization in between.
+
+All are machine-checked theorems with no axioms or admitted goals. See `coq/README.md`.
+
+Honest scope: the finite TLC runs check the temporal behavior and the adversary on small instances; the Coq proofs generalize the payment, binding, and reorg-threshold results to all sizes. Remaining milestone-3 work is a machine-checked proof of the full multi-slot temporal behavior (liveness across slots, single-slot-finality interactions).
 
 ## What it models
 
@@ -66,7 +71,8 @@ specs/EPBSForkChoice.tla          milestone 2: fork-choice / reorg-threshold mod
 specs/EPBSForkChoice.cfg          safe parameters (payload never reorged)
 specs/EPBSForkChoice_attack.cfg   unsafe parameters (reorg counterexample)
 coq/EPBSPayment.v                 milestone 3: Coq proof of the payment core (all sizes)
-coq/README.md                     what the Coq development proves
+coq/EPBSForkChoice.v              milestone 3: Coq proof of the reorg threshold (all weights)
+coq/README.md                     what the Coq developments prove
 RESULTS.md                        the measured milestone-1 TLC run
 MILESTONE2.md                     the fork-choice result and reorg threshold
 PROPERTIES.md                     the milestone-1 invariant catalog

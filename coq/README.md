@@ -1,10 +1,10 @@
-# Milestone 3: Machine-Checked Payment Core
+# Milestone 3: Machine-Checked Core
 
-`EPBSPayment.v` proves the EIP-7732 payment core in Coq (the Rocq Prover) for **all** bid values, **all** balances, and **any** number of uninvolved builders. This is the step the finite TLC runs cannot give: a model check confirms the properties on a small instance, a proof guarantees them for every size.
+Two standalone Coq (Rocq Prover) developments lift the strongest properties from "checked on a small TLC instance" to "proved for every size". Each file depends only on the standard library and checks with a plain `coqc`.
 
-## What is proved
+## `EPBSPayment.v`: the payment core, for all sizes
 
-Every statement below is a Coq theorem checked by `coqc`. None uses `Admitted`, `admit`, `Axiom`, or `Parameter`; the only imports are the standard library `ZArith` and the `lia` arithmetic decision procedure, which produces ordinary proof terms.
+Proves the EIP-7732 payment core for **all** bid values, **all** balances, and **any** number of uninvolved builders.
 
 | Theorem | Meaning |
 |---|---|
@@ -17,6 +17,21 @@ Every statement below is a Coq theorem checked by `coqc`. None uses `Admitted`, 
 | `equivocation_not_canonical` | An equivocated reveal never yields a canonical payload. |
 | `withhold_not_canonical` | A withheld reveal never yields a canonical payload. |
 
+## `EPBSForkChoice.v`: the reorg threshold, for all weights
+
+Lifts the fork-choice reorg threshold (which `../specs/EPBSForkChoice.tla` measures on two finite parameter sets) to a theorem true for **all** non-negative weights.
+
+| Theorem | Meaning |
+|---|---|
+| `timely_payload_safe` | Above the threshold, a timely payload is canonical against any adversary strategy. |
+| `reorg_threshold_iff` | The exact characterization: for the worst-case adversary, B1 is canonical iff `HonestWeight + PayloadBoost >= ByzWeight + ProposerBoost`. |
+| `reorg_below_threshold` | Below the threshold, the worst-case adversary reorgs the timely payload (the threshold is tight, not just sufficient). |
+| `reorg_implies_adversary_heavy` | A reorg of a timely payload forces the adversary to strictly out-weigh the honest committee plus the payload boost. |
+
+## No axioms
+
+None of the theorems in either file uses `Admitted`, `admit`, `Axiom`, or `Parameter`; the only imports are the standard library `ZArith` and the `lia` arithmetic decision procedure, which produces ordinary proof terms. A clean `coqc` exit is therefore a complete proof.
+
 ## Relationship to the TLA+ models
 
 The TLA+ models (`../specs/`) check these properties, plus the fork-choice and liveness properties, on small finite instances with TLC. This Coq development lifts the payment and binding properties from "checked on an instance" to "proved for all sizes". The two are complementary: TLC explores the temporal behavior and the adversary; Coq generalizes the arithmetic core.
@@ -24,8 +39,9 @@ The TLA+ models (`../specs/`) check these properties, plus the fork-choice and l
 ## Build
 
 ```bash
-# Requires Coq / the Rocq Prover (tested with Rocq 9.2).
+# Requires Coq / the Rocq Prover (tested with Rocq 9.2). Each file is standalone.
 coqc EPBSPayment.v
+coqc EPBSForkChoice.v
 ```
 
-A clean exit and a generated `EPBSPayment.vo` mean every theorem type-checked. Because there are no `Admitted` goals or axioms, that is a complete proof, not a partial one.
+A clean exit and a generated `.vo` mean every theorem type-checked. Because there are no `Admitted` goals or axioms, that is a complete proof, not a partial one.

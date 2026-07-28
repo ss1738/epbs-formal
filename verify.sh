@@ -60,6 +60,11 @@ tlc_expect_violation "fork-choice (attack)" EPBSForkChoice_attack.cfg EPBSForkCh
 tlc_green            "multi-slot chain"    EPBSChain.cfg          EPBSChain.tla
 tlc_green            "timed PTC votes"     EPBSPTC.cfg            EPBSPTC.tla
 
+echo "Larger instances (scaling evidence, see SCALING.md):"
+tlc_green            "single-slot (large)"  EPBS_large.cfg         EPBS.tla
+tlc_green            "timed PTC (large)"     EPBSPTC_large.cfg      EPBSPTC.tla
+tlc_green            "multi-slot (large)"    EPBSChain_large.cfg    EPBSChain.tla
+
 echo "Non-vacuity self-tests (injected bugs must be caught):"
 tlc_expect_violation "fault: steal-on-reorg" EPBS_fault_steal.cfg   EPBS.tla INV_G3_BuilderWithholdSafety
 tlc_expect_violation "fault: binding-break"  EPBS_fault_binding.cfg EPBS.tla INV_CommitmentBinding

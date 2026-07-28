@@ -90,6 +90,7 @@ specs/EPBS_fault_*.cfg            non-vacuity self-tests (injected bugs TLC must
 coq/EPBSPayment.v                 milestone 3: Coq proof of the payment core (all sizes)
 coq/EPBSForkChoice.v              milestone 3: Coq proof of the reorg threshold (all weights)
 coq/EPBSEquivocation.v            Coq proof that equivocation is self-punishing (no slashing needed)
+coq/EPBSCommittee.v               Coq proof of PTC tally correctness for all committee sizes
 coq/README.md                     what the Coq developments prove
 THREAT_MODEL.md                   adversary coverage matrix vs EIP-7732
 MUTATIONS.md                      non-vacuity: injected bugs are caught by the right invariant

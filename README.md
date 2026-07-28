@@ -12,7 +12,9 @@ Milestone 1 is done: the single-slot EIP-7732 model is written and has been chec
 - The three EIP-7732 guarantees (proposer unconditional payment, builder reveal safety, builder withhold safety) plus six structural invariants and a liveness property are defined (see `PROPERTIES.md`).
 - **TLC checked all of them green** on the finite instance in `specs/EPBS.cfg` (207 distinct states, search depth 8, no errors). The measured run is in `RESULTS.md`. Both the base spec and the optional equivocation-slashing mitigation pass.
 
-Honest scope: a finite TLC run checks the properties on a small instance under the modeled adversary. It does not prove them for all builder counts or the full multi-slot fork choice. Those are milestones 2 and 3.
+Milestone 2 is under way: `specs/EPBSForkChoice.tla` adds an explicit payload-timeliness fork choice and measures the exact weight threshold at which a timely payload becomes reorg-safe. TLC confirms safety above the threshold and returns the reorg counterexample below it, while the payment guarantees hold on both sides. See `MILESTONE2.md`.
+
+Honest scope: a finite TLC run checks the properties on a small instance under the modeled adversary. It does not prove them for all builder counts or the full multi-slot fork choice. Those are milestones 2 (in progress) and 3.
 
 ## What it models
 
@@ -56,12 +58,16 @@ Ethereum's public roadmap lists ePBS (Glamsterdam) as a near-term L1 change. The
 ## Layout
 
 ```
-specs/EPBS.tla     the model
-specs/EPBS.cfg     the TLC configuration (small finite instance)
-RESULTS.md         the measured TLC run
-PROPERTIES.md      the full catalog of invariants and temporal properties
-MILESTONES.md      the delivery plan
-PROPOSAL.md        the grant / office-hours brief
+specs/EPBS.tla                    milestone 1: single-slot EIP-7732 model
+specs/EPBS.cfg                    its TLC configuration
+specs/EPBSForkChoice.tla          milestone 2: fork-choice / reorg-threshold model
+specs/EPBSForkChoice.cfg          safe parameters (payload never reorged)
+specs/EPBSForkChoice_attack.cfg   unsafe parameters (reorg counterexample)
+RESULTS.md                        the measured milestone-1 TLC run
+MILESTONE2.md                     the fork-choice result and reorg threshold
+PROPERTIES.md                     the milestone-1 invariant catalog
+MILESTONES.md                     the delivery plan
+PROPOSAL.md                       the grant / office-hours brief
 ```
 
 ## License

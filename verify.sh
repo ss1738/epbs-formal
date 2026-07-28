@@ -60,6 +60,10 @@ tlc_expect_violation "fork-choice (attack)" EPBSForkChoice_attack.cfg EPBSForkCh
 tlc_green            "multi-slot chain"    EPBSChain.cfg          EPBSChain.tla
 tlc_green            "timed PTC votes"     EPBSPTC.cfg            EPBSPTC.tla
 
+echo "Non-vacuity self-tests (injected bugs must be caught):"
+tlc_expect_violation "fault: steal-on-reorg" EPBS_fault_steal.cfg   EPBS.tla INV_G3_BuilderWithholdSafety
+tlc_expect_violation "fault: binding-break"  EPBS_fault_binding.cfg EPBS.tla INV_CommitmentBinding
+
 echo "Coq proofs (coqc):"
 coq_check EPBSPayment.v
 coq_check EPBSForkChoice.v

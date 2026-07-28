@@ -1,0 +1,18 @@
+# TLC / TLA+ Toolbox artifacts
+*.toolbox/
+states/
+*.st
+*.fp
+MC.out
+*.tlaps/
+_build/
+
+# TLC model-checker output
+tlc-output/
+*.dot
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

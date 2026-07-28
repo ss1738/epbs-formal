@@ -24,4 +24,4 @@ java -cp tla2tools.jar tlc2.TLC -config specs/EPBSPTC_large.cfg    specs/EPBSPTC
 java -cp tla2tools.jar tlc2.TLC -config specs/EPBSChain_large.cfg  specs/EPBSChain.tla
 ```
 
-The default (small) configurations remain the ones run by `verify.sh` and CI, so the automated check stays fast; these larger runs are supplementary evidence.
+These larger configurations are run by `verify.sh` alongside the small ones, so the scaling evidence is enforced in CI on every push, not just recorded here. They remain small enough that the whole suite still finishes in seconds.

@@ -6,6 +6,8 @@ A machine-checkable formal model of **Enshrined Proposer-Builder Separation (ePB
 
 ePBS replaces out-of-protocol relays (MEV-Boost) with in-protocol rules governing how a proposer commits to a builder's block and how the builder is obligated to reveal it. Getting those rules wrong is a consensus-level risk that cannot be rolled back once shipped. This project models the EIP-7732 mechanism (the `SignedExecutionPayloadBid`, the `BuilderPendingPayment` deducted at inclusion, the PTC `payload_present` vote, and the canonical-versus-reorged settlement) and checks its three stated safety guarantees plus liveness, so problems are found before enshrinement rather than after.
 
+The models have been cross-checked against the live executable spec: in `ethereum/consensus-specs`, ePBS is now the **Gloas** fork (`specs/gloas/`). `FIDELITY.md` maps each model element to the Gloas functions and constants (`process_execution_payload_bid`, `payload_timeliness`, `PAYLOAD_TIMELY_THRESHOLD = PTC_SIZE // 2`, the `is_head_weak` / `is_parent_strong` reorg gate) and states the abstraction deltas honestly. Notably, Gloas defines no equivocation slashing, which confirms the model's base choice and the `coq/EPBSEquivocation.v` argument.
+
 ## Status
 
 Milestone 1 is done: the single-slot EIP-7732 model is written and has been checked with TLC.

@@ -18,7 +18,7 @@ A solo, self-contained delivery plan. Each milestone is a complete, publishable 
 
 - A real fork-choice fragment (payload-timeliness boost) instead of the single `blockFate` choice. **Done:** `specs/EPBSForkChoice.tla` derives the block's fate from an accumulated-weight fork choice and measures the exact reorg threshold. See `MILESTONE2.md`.
 - Multi-slot history beyond two slots. **Done:** `specs/EPBSChain.tla` runs a bounded chain of slots with asynchronous, cross-slot withdrawal processing (EIP-7732's queued `BuilderPendingWithdrawal`), and TLC checks conservation and liveness (every queued withdrawal drains) across the whole chain.
-- Per-attester timed votes rather than one atomic PTC step. **Remaining.**
+- Per-attester timed votes rather than one atomic PTC step. **Done:** `specs/EPBSPTC.tla` casts each PTC vote as its own interleaved step with a deadline, Byzantine members that may lie or abstain, and late votes. TLC proves `INV_Correct`: the timed tally always equals the truth, which shows the atomic PTC step in `EPBS.tla` is a sound abstraction.
 - An adversary that can choose its Byzantine set adaptively within the honest-majority bound. **Remaining.**
 
 Re-check all properties against the refined model and publish deltas from milestone 1.

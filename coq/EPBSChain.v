@@ -63,3 +63,22 @@ Proof.
   pose proof (run_conserves es s) as Hc.
   unfold ctotal in *. lia.
 Qed.
+
+(** Progress and drainage. Applying [k] withdrawal drains reduces the escrow by
+    exactly [k*v]. So an escrow holding [k*v] drains to zero in [k] steps: the
+    constructive, all-lengths counterpart of the model's LIVE_Drained liveness. *)
+Lemma drain_owed : forall k v s,
+  owed (fold_left cstep (repeat (EDrain v) k) s) = owed s - Z.of_nat k * v.
+Proof.
+  induction k as [| k IH]; intros v s.
+  - cbn [repeat fold_left]. lia.
+  - cbn [repeat fold_left]. rewrite IH. cbn [cstep owed].
+    rewrite Nat2Z.inj_succ. lia.
+Qed.
+
+Theorem drains_to_zero : forall k v s,
+  owed s = Z.of_nat k * v ->
+  owed (fold_left cstep (repeat (EDrain v) k) s) = 0.
+Proof.
+  intros k v s Hk. rewrite drain_owed, Hk. lia.
+Qed.

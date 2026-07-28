@@ -58,6 +58,8 @@ Lifts the multi-slot conservation (which `../specs/EPBSChain.tla` checks at a bo
 | `cstep_conserves` | Every event (full, empty, reorged, skipped, drain) conserves the proposer + builder + escrow total. |
 | `run_conserves` | The whole chain conserves the total, for any events and any length. |
 | `drained_settles` | Once all withdrawals have drained, the proposer and builder balances account for exactly the starting total. |
+| `drain_owed` | Applying k drains reduces the escrow by exactly k times the withdrawal amount. |
+| `drains_to_zero` | An escrow holding k withdrawals drains to zero in k steps (constructive liveness, all lengths). |
 
 ## No axioms
 

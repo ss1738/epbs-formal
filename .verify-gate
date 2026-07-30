@@ -1,0 +1,3 @@
+# push gate over verify.sh (TLC + Coq). Run `verify-gate run` before pushing
+# (heavy: TLC/Java — run locally when ready or on a Mini).
+verify: ./verify.sh

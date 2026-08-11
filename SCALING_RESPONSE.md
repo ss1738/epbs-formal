@@ -223,6 +223,29 @@ before it is believed.
 
 ## 5. The computational boundary
 
+```mermaid
+graph TD
+    SPEC["EPBSMultiSlot.tla"]
+    SPEC --> TLC["TLC — enumerative"]
+    SPEC --> APA["Apalache / Z3 — symbolic"]
+
+    TLC --> W1["depth 10, 84.3M distinct states<br/>67M still queued, never exhausts<br/>at 4 validators / 2 slots / budget 1"]
+    W1 --> W1b["breadth-first explores WIDTH;<br/>the behaviour of interest is at depth ~120"]
+
+    APA --> T1["typecheck: EXITCODE OK"]
+    T1 --> W2["nested CHOOSE descent:<br/>no result in 7+ min at --length=1"]
+    W2 -->|"flat GHOST predicate"| W3["--length=1 OK in ~20s<br/>(~20x per-state reduction)"]
+    W3 --> W4["--length=2 timeout 540s<br/>--length=3 reaches Step 2, timeout"]
+    W4 --> W4b["the flat form moved the wall,<br/>it did not remove it"]
+
+    W1b --> NEXT["neither reaches the multi-slot region"]
+    W4b --> NEXT
+    NEXT --> IND["next lever: inductive invariant at --length=1<br/>(blocked on modelling get_filtered_block_tree,<br/>see REBUILD_BLUEPRINT.md §1.6)"]
+```
+
+*Measured, not projected. State caching was proposed but never implemented — the
+~20s figure comes from the flat predicate alone.*
+
 With both fixes applied, TLC does not exhaust **4 validators, 2 slots, adversary
 budget 1** — the smallest configuration that still permits a PTC verdict. 55.7M
 distinct states, 40.6M queued, still running.

@@ -319,6 +319,60 @@ ViableBlocks == blocks          \* identity under the assumption above
 Modelling it properly needs justified and finalized checkpoints as state, which the
 current design has no representation of.
 
+### 1.7 `should_apply_proposer_boost` — the boost is conditional, and `is_head_weak`
+### is a fork-choice constraint
+
+Call graph, by line number in `gloas/fork-choice.md`:
+
+```
+get_weight (521) -> should_apply_proposer_boost (529, def 485) -> is_head_weak (499)
+get_proposer_head (796) -> is_head_weak
+                   (799) -> is_parent_strong        <- only call site
+```
+
+**`is_head_weak` has two call sites, and one of them is inside `get_weight`.**
+`SCALING_RESPONSE.md` §2 states that `is_head_weak` and `is_parent_strong` are "not
+fork-choice constraints... an adversary ignores them". That is true of
+`is_parent_strong` and **false of `is_head_weak`**, which gates proposer boost and
+therefore feeds fork-choice weight directly. The published document is wrong on this
+point and the retraction banner must be extended.
+
+The full predicate:
+
+```python
+def should_apply_proposer_boost(store) -> bool:
+    if store.proposer_boost_root == Root(): return False
+    ...
+    if parent.slot + 1 < slot: return True          # parent not from previous slot
+    if not is_head_weak(store, parent_root): return True
+    equivocations = [root for root, block in store.blocks.items()
+        if (store.block_timeliness[root][PTC_TIMELINESS_INDEX]
+            and block.proposer_index == parent.proposer_index
+            and block.slot + 1 == slot
+            and root != parent_root)]
+    return len(equivocations) == 0
+```
+
+**The adversarial lever.** When the parent is weak and from the previous slot, boost
+applies only if the previous slot's proposer did not equivocate. So **a proposer
+equivocating in slot N-1 suppresses the slot-N proposer's boost** — an adversary in
+one slot degrading the next proposer's fork-choice weight. This is a multi-slot
+interaction between proposer behaviour and fork choice, of exactly the class the ESP
+review said the models did not reach, and v1 could not express any part of it.
+
+Model implications:
+
+- `blockTimeliness : Int -> [Int -> Bool]` with two indices.
+  `ATTESTATION_TIMELINESS_INDEX = 0` (read by `is_head_late`) and
+  `PTC_TIMELINESS_INDEX = 1` (read here). **Two independent deadlines per block**;
+  collapsing them removes adversarial freedom.
+- `proposerIndex : Int -> Str`, needed to detect same-proposer equivocation.
+- `AdvProposerEquivocate(slot)` becomes a first-class adversary action: publish two
+  timely blocks from one proposer in a slot, purely to strip the next proposer's
+  boost. Build it early — it is cheap and attacks a real mechanism.
+- Note `should_apply_proposer_boost` is a property of the STORE, not of a node: it
+  is evaluated once and applies to the whole weight computation.
+
 ---
 
 ## 2. Scaling
@@ -527,6 +581,7 @@ claims that were false.
 - ~~`get_filtered_block_tree` unread.~~ **RESOLVED** — read at
   `phase0/fork-choice.md`, unmodified in Gloas. See §1.6: safely omitted below one
   epoch, mandatory above it.
-- `should_apply_proposer_boost` has a third clause past what is quoted above.
+- ~~`should_apply_proposer_boost` third clause unread.~~ **RESOLVED** — see §1.7. It
+  corrects a claim already published in `SCALING_RESPONSE.md` §2.
 - Whether `IndInv` can be strengthened to inductive at all here is unknown. If it
   cannot, multi-slot claims stay out of reach and the honest report says so.

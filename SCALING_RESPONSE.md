@@ -14,6 +14,14 @@
 > The coupling between the PTC and fork choice is real; the mechanism described
 > here is not. This error predates the ESP submission.
 >
+> **§2 — `is_head_weak` is a fork-choice constraint.** This document states that
+> `is_head_weak` and `is_parent_strong` are "not fork-choice constraints... an
+> adversary ignores them". True of `is_parent_strong`, whose only call site is
+> `get_proposer_head`. **False of `is_head_weak`**, which is also called from
+> `should_apply_proposer_boost` (`gloas:499`), itself called from `get_weight`
+> (`gloas:529`). It gates proposer boost and therefore feeds fork-choice weight
+> directly. See `REBUILD_BLUEPRINT.md` §1.7.
+>
 > **§2 — the honest/adversary asymmetry.** `HonestMayReorg` was unsatisfiable at
 > every configuration ever run, so `ProposeHonestReorg` was dead code. Fixed in
 > `f88df8e`; the mechanism now fires in 725 states.

@@ -2,6 +2,43 @@
 
 [![verify](https://github.com/ss1738/epbs-formal/actions/workflows/verify.yml/badge.svg)](https://github.com/ss1738/epbs-formal/actions/workflows/verify.yml)
 
+
+> ## ⚠ Under structural revision — parts of this README are known false
+>
+> An audit on 2026-08-11 found five modelling defects (D1–D5). The most serious:
+> **Gloas adds no payload weight to fork choice.** `get_weight` returns
+> `attestation_score + proposer_score` and contains no payload term. Payload
+> timeliness works through *node identity* — `get_node_children` spawns a FULL
+> candidate node only when `is_payload_verified` holds, and `get_head` resolves
+> full-vs-empty with `get_payload_status_tiebreaker`.
+>
+> Claims below that are **superseded**:
+>
+> - *"measures the exact weight threshold at which a timely payload becomes
+>   reorg-safe"* — that threshold is defined over a weight the protocol does not
+>   have. This predates the ESP submission.
+> - *"`coq/EPBSForkChoice.v` proves the reorg threshold for all non-negative
+>   weights"* — the theorem is machine-checked and correct **about the model**; the
+>   model's mechanism is not the protocol's. The payment proofs
+>   (`coq/EPBSPayment.v`) are unaffected.
+> - *"the invariants are shown to have teeth"* — true when written; after the D2
+>   correction the main fork-choice invariant went vacuous under the withhold
+>   configuration.
+> - *"the `is_head_weak` / `is_parent_strong` reorg gate"* — `is_head_weak` is also
+>   called from `should_apply_proposer_boost` inside `get_weight`, so it is a
+>   fork-choice constraint, not only an honest-proposer gate.
+>
+> **Read these first:**
+>
+> | Document | What it is |
+> |---|---|
+> | [`D5_PAYLOAD_WEIGHT.md`](D5_PAYLOAD_WEIGHT.md) | The erratum: why the payload-weight mechanism is phantom |
+> | [`REBUILD_BLUEPRINT.md`](REBUILD_BLUEPRINT.md) | v2 architecture, read function-by-function from `gloas/fork-choice.md`. Includes diagrams of the alternating node tree and the cross-slot boost-suppression attack |
+> | [`SCALING_RESPONSE.md`](SCALING_RESPONSE.md) | Response to the EF ESP review, with its own retraction banner and the TLC/Apalache pipeline diagram |
+>
+> The CI badge above reflects the *old* specs, which still check green. That is the
+> point of the problem, not evidence against it.
+
 A machine-checkable formal model of **Enshrined Proposer-Builder Separation (ePBS)** as specified in **[EIP-7732](https://eips.ethereum.org/EIPS/eip-7732)**, the proposer/builder split that Ethereum's Glamsterdam upgrade brings into the consensus protocol itself.
 
 ePBS replaces out-of-protocol relays (MEV-Boost) with in-protocol rules governing how a proposer commits to a builder's block and how the builder is obligated to reveal it. Getting those rules wrong is a consensus-level risk that cannot be rolled back once shipped. This project models the EIP-7732 mechanism (the `SignedExecutionPayloadBid`, the `BuilderPendingPayment` deducted at inclusion, the PTC `payload_present` vote, and the canonical-versus-reorged settlement) and checks its three stated safety guarantees plus liveness, so problems are found before enshrinement rather than after.

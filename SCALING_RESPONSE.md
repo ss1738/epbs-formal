@@ -267,6 +267,26 @@ validators. Four nested levels of that, and `ChainHead` appears in `Canonical`,
 `Reorged`, `IsHeadWeak` and the invariant. The SMT formula for one state is large
 enough that Z3 does not return.
 
+**Isolation test.** The diagnosis above was initially inferred from the shape of
+the operator. It has since been measured. `EPBSStub.tla` is byte-identical to
+`EPBSMultiSlot.tla` except for one line:
+
+```tla
+ChainHead == Genesis   \* stubbed, replacing the four-level Descend nest
+```
+
+Same config, same bound, same invariant:
+
+| Variant | `--length=1` result |
+|---|---|
+| `ChainHead` = GHOST descent | no result in 7+ minutes |
+| `ChainHead` = `Genesis` | **`Checker reports no error up to computation length 1`, `EXITCODE: OK`, ~10 s** |
+
+So the bottleneck is that operator specifically, and Apalache is otherwise able to
+check this model: it verified the invariant at depth 1 in ten seconds. Symbolic
+checking is blocked on one operator we wrote for TLC's convenience, not on
+Apalache's capability, not on our type structure, and not on the model's size.
+
 This is a modelling problem, not an Apalache limitation. The fix is to stop
 recomputing the head and carry it as state — maintain `head` as a variable updated
 incrementally when blocks or votes change, and assert GHOST-consistency as a

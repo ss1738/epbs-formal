@@ -22,10 +22,34 @@ apalache-mc check --cinit=ConstInit --init=Init --next=Next --inv=<INV> --length
 | `S5_ChildAttachesToOneBranch` | **HOLDS** | ~2 s | no |
 | `S6_FullImpliesVerified` | **HOLDS** | ~2 s | no |
 | `VAC_BoostReachesDescendant` | **VIOLATED** (desired) | 4 s | no |
-| `S4_PayloadStatusExclusive` | **no result in >10 min** | — | **yes** |
+| `S4_PayloadStatusExclusive` | **`OutOfMemoryError` at `-Xmx12g`** | ~3 s after reaching the checker | **yes** |
 
 MEASURED. The correlation in the right-hand column is the central finding of this
 document and drives §1–§3.
+
+**Correction.** An earlier revision of this file, and commit `5bd9054`'s message,
+recorded the S4 row as "no result in >10 min" and attributed it to solver time.
+That is wrong. From `detailed.log` of the 10:14:38 run:
+
+```
+PASS #12: AnalysisPass [OK]        (Skolemization, Expansion)
+PASS #13: BoundedChecker
+State 0: Checking 1 state invariants
+State 0: Checking state invariant 0
+java.lang.OutOfMemoryError: Java heap space
+```
+
+Every pass up to the checker completed in ~3 s total, and the heap died ~3 s into
+constraint construction. **Z3 never received a complete problem.** The failure is
+in Apalache's rewriter, translating the invariant into SMT — not in solving it.
+The >10 min figure was a separate solo re-run made *after* the `is_ancestor` fix,
+i.e. of a different and more expensive expression, and should not have been
+attributed to the same run.
+
+This matters for the fix. A solver-time wall argues for better encodings or more
+time; a rewriter heap wall argues for **smaller terms**, which is what §2 and §3
+deliver. It also rules out "raise the timeout" as an option, and makes "raise the
+heap" a temporary measure at best: the term size is the problem.
 
 **Defect found and fixed during this run (finding #10).** `NodeInSubtree` was
 written as record equality. The spec's `is_ancestor` is not equality:
@@ -51,12 +75,14 @@ passes every safety check ever written about it.
 
 ## §1 The bottleneck is `CHOOSE`, and it is not what the rewrite was supposed to fix
 
-Invariants that avoid `ChainHead` return in 1–4 s. The one that reaches it does
-not return in 10 minutes on a domain of at most 5 blocks and 3 validators.
+Invariants that avoid `ChainHead` return in 1–4 s. The one that reaches it
+exhausts a 12 GB heap during constraint construction, on a domain of at most 5
+blocks and 3 validators.
 
 `ChainHead == IF \E h \in AllNodes : IsHead(h) THEN CHOOSE h \in AllNodes : IsHead(h) ELSE ...`
 
-Cost structure, INFERRED from that shape:
+Cost structure. The blow-up is in **term construction**, MEASURED above; the
+following account of why is INFERRED from that shape:
 
 - `CHOOSE` is not a search, it is a *definite description*. Apalache must encode
   a Skolem constant plus the constraint that it satisfies `IsHead`, and — because

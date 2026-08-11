@@ -178,6 +178,48 @@ beyond that constraint, but no account of *what* content, and "holds at these
 bounds" is not "holds". Do not cite `S4` as a protocol property until the
 mechanism is identified.
 
+### §1.3 Full probe suite, completed
+
+The five original probes had never finished — the loop running them was killed
+mid-run at 11:00, after `S6` and before any `VAC_` row, and the post-M3 batch only
+covered the four new ones. Completed now, post-M3:
+
+| Probe | Result | Time |
+|---|---|---|
+| `VAC_FullNodeCanonical` | VIOLATED | 51 s |
+| `VAC_EmptyNodeCanonical` | VIOLATED | 52 s |
+| `VAC_PrevSlotDecision` | VIOLATED | 52 s |
+| `VAC_BoostApplies` | VIOLATED | 50 s |
+| `VAC_TiebreakerZero` | VIOLATED | 52 s |
+
+MEASURED. All nine probes now fire. Both payload statuses can be canonical, the
+weight-zeroing previous-slot rule is reachable, and the `Tiebreaker = 0` branch —
+a FULL node scoring *below* EMPTY because `should_extend_payload` is false — is
+reachable rather than dead.
+
+**`VAC_BoostApplies` is the weak one and must not be read as reassurance.**
+`boostApplies` is a free boolean in this module, so the probe only shows the
+solver can set it TRUE. It says nothing about whether the protocol would. Under
+§4.3(e) it must be derived from `ShouldApplyProposerBoost`; until it is, this
+module permits boost in states Gloas forbids — the D1 failure mode, still live.
+
+### §1.4 What `EPBSNodes.tla` does NOT establish
+
+Stated because a complete green suite invites the opposite conclusion.
+
+1. **`get_filtered_block_tree` is unmodelled.** `get_head` descends the *filtered*
+   tree, which prunes branches by justified/finalized checkpoint compatibility.
+   `HeadCertified` certifies a head of the **unfiltered** tree. This is the
+   largest single gap and it sits directly under the one property just verified.
+2. **`boostApplies` is free, not derived** (above).
+3. **`IsHeadWeak` does not exist**, so §6's `ShouldApplyProposerBoost` cannot be
+   written yet, and the equivocator add-back loop it needs has no counterpart.
+4. **`ShouldExtendPayload` under-approximates** — two disjuncts omitted.
+5. **`S4`'s forcing mechanism is unknown** (§1.2).
+6. **There are no actions.** Every result here is about a static domain of trees.
+   Nothing about transitions, slots, or adversarial behaviour is verified, because
+   nothing about them is modelled.
+
 **Mandate M1 is therefore not a recommendation but a measured necessity.**
 `EPBSMultiSlotV2` MUST NOT contain `CHOOSE` in any operator reachable from an
 invariant. The head is carried as state and validated locally (§3, M3). M3 is now

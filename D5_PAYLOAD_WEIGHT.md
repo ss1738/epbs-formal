@@ -84,6 +84,21 @@ the PTC and fork choice is real; the mechanism we gave it is not.
 3. Read `get_node_children` and `get_payload_status_tiebreaker` and confirm payload
    status is a node attribute.
 
+## The Coq development is affected too
+
+`README.md` claims `coq/EPBSForkChoice.v` "proves the reorg threshold for **all**
+non-negative weights: a timely payload is canonical against any adversary above the
+threshold". The theorem is machine-checked and axiom-free, and it is correct **about
+the model**. But the threshold it characterises is defined over `PayloadBoost` — the
+weight this document shows does not exist in Gloas.
+
+So the strongest unbounded result in the repository is a rigorous theorem about a
+mechanism the protocol does not have. `coq/EPBSPayment.v` is unaffected: payment
+conservation, G1/G3 and commitment binding do not depend on payload weight.
+
+This was missed for most of the audit because the Coq development was treated as the
+solid foundation. It inherits D5 exactly as the TLA+ did.
+
 ## Fix, and its size
 
 This is not a patch. Faithful modelling requires fork-choice nodes to be

@@ -21,6 +21,7 @@ ConstInit ==
     /\ ProposerBoost = 2
     /\ CurrentSlot   = 3
     /\ MaxDepth      = 4
+    /\ ReorgHeadWeightAbs = 2
 
 \* Every well-formed tree. Two restrictions are MODELLING choices, not protocol
 \* facts, and are named as such:
@@ -51,7 +52,6 @@ Init ==
     /\ equivocators \subseteq ByzValidators
     /\ boostRoot \in Ids
     /\ (boostRoot # 0 => boostRoot \in blocks)
-    /\ boostApplies \in BOOLEAN
     /\ latestMsg \in [Validators -> [slot: Slots, root: Ids, present: BOOLEAN]]
     /\ \A v \in Validators : latestMsg[v].root \in blocks
     \* Ancestry is admitted DECLARATIVELY, not constructed. nodeAnc ranges over
@@ -64,6 +64,15 @@ Init ==
     /\ \A b \in Ids \ blocks : nodeAnc[b] = {}
     \* The head is admitted freely and constrained by its certificate -- the M3
     \* substitution. No CHOOSE anywhere in the reachable term graph.
+    /\ proposer \in [Ids -> Validators]
+    /\ viableLeaf \in SUBSET Ids
+    /\ viableLeaf \subseteq blocks
+    /\ filtered \in SUBSET Ids
+    /\ filtered \subseteq blocks
+    /\ FilteredClosure
+    \* boostApplies is DERIVED, not free. Leaving it free lets induction grant
+    \* boost in states Gloas forbids -- the D1 false positive.
+    /\ boostApplies = ShouldApplyProposerBoost
     /\ head \in AllNodes
     /\ headPath \in SUBSET AllNodes
     /\ HeadCertified

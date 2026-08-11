@@ -203,22 +203,74 @@ solver can set it TRUE. It says nothing about whether the protocol would. Under
 §4.3(e) it must be derived from `ShouldApplyProposerBoost`; until it is, this
 module permits boost in states Gloas forbids — the D1 failure mode, still live.
 
-### §1.4 What `EPBSNodes.tla` does NOT establish
+### §1.4 Entry gates implemented: filtered tree + derived boost
+
+Both gates required before `EPBSMultiSlotV2`, now in `EPBSNodes.tla` and measured.
+
+**Finding #11.** `get_node_children`'s else-branch is `for root in blocks` where
+`blocks` is `get_filtered_block_tree(store)`'s result, **not** `store.blocks`.
+Ranging over every block — which is what the module did — lets `get_head` descend
+into branches the protocol has pruned. This sat directly under `HeadCertified`,
+i.e. under the one property that had just been verified.
+
+`filter_block_tree` is a recursive DFS, and Apalache rejects recursion. But
+viability propagates strictly *upward* from leaves — an internal block is viable
+iff any child is — so
+
+> `b` is in the filtered tree **iff** some viable leaf has `b` on its path
+
+which the ancestry already in state expresses with no recursion. Carried as
+`filtered`, pinned by `FilteredClosure`, so `NodeChildren` pays a set membership.
+
+**`viableLeaf` is a named abstraction, not a model.** `correct_justified` and
+`correct_finalized` need epochs, justification and `get_voting_source`, none of
+which exist here. `viableLeaf` is an *unconstrained* subset of block-level
+leaves, so the solver ranges over every possible viability assignment and results
+hold for all of them. The filtering **structure** is exact; the viability
+**predicate** is not modelled, and this variable is where that gap is named
+rather than hidden.
+
+**`boostApplies` is now derived**, `= ShouldApplyProposerBoost`, implementing the
+§6 four-conjunct gate. `IsHeadWeak` uses an **absolute** threshold constant: the
+spec's `calculate_committee_fraction` yields `(3 // 32) * 20 // 100 = 0` at model
+scale, making `weight < 0` unsatisfiable and silently disabling every mechanism
+gated on it. That is D1, and it made `ProposeHonestReorg` dead code through every
+v1 run.
+
+| Probe | Result | Time |
+|---|---|---|
+| `VAC_FilteredPrunes` | VIOLATED | 52 s |
+| `VAC_HeadWeak` | VIOLATED | 53 s |
+| `VAC_BoostSuppressed` | VIOLATED | 55 s |
+| `VAC_MultiBlock` / `HeadDeep` / `HeadFull` | VIOLATED | 53-57 s |
+| `VAC_BoostReachesDescendant` | VIOLATED | 58 s |
+
+| Invariant | Result | Time |
+|---|---|---|
+| `TypeOK` | HOLDS | 54 s |
+| `AncRootsUnique` | HOLDS | 51 s |
+| `S4_PayloadStatusExclusive` | HOLDS | 51 s |
+| `S5_ChildAttachesToOneBranch` | HOLDS | 50 s |
+| `S6_FullImpliesVerified` | HOLDS | 52 s |
+
+MEASURED. Twelve probes now fire and safety survives the filtered tree at no
+measurable cost. **`VAC_BoostSuppressed` violating is the notable one**: the
+four-conjunct suppression gate — the highest reachability risk in §6, with one
+conjunct that was outright unsatisfiable in v1 — is reachable.
+
+### §1.5 What `EPBSNodes.tla` does NOT establish
 
 Stated because a complete green suite invites the opposite conclusion.
 
-1. **`get_filtered_block_tree` is unmodelled.** `get_head` descends the *filtered*
-   tree, which prunes branches by justified/finalized checkpoint compatibility.
-   `HeadCertified` certifies a head of the **unfiltered** tree. This is the
-   largest single gap and it sits directly under the one property just verified.
-2. **`boostApplies` is free, not derived** (above).
-3. **`IsHeadWeak` does not exist**, so §6's `ShouldApplyProposerBoost` cannot be
-   written yet, and the equivocator add-back loop it needs has no counterpart.
-4. **`ShouldExtendPayload` under-approximates** — two disjuncts omitted.
-5. **`S4`'s forcing mechanism is unknown** (§1.2).
-6. **There are no actions.** Every result here is about a static domain of trees.
+1. **Leaf viability is abstracted, not modelled** (§1.4). The filtering structure
+   is exact; `correct_justified` / `correct_finalized` are not modelled at all.
+2. **`ShouldExtendPayload` under-approximates** — two disjuncts omitted.
+3. **`S4`'s forcing mechanism is unknown** (§1.2).
+4. **The absolute reorg threshold is a rescaling**, not the protocol's formula.
+   Results about `is_head_weak` are about the rescaled model.
+5. **There are no actions.** Every result here is about a static domain of trees.
    Nothing about transitions, slots, or adversarial behaviour is verified, because
-   nothing about them is modelled.
+   nothing about them is modelled. This remains the largest gap.
 
 **Mandate M1 is therefore not a recommendation but a measured necessity.**
 `EPBSMultiSlotV2` MUST NOT contain `CHOOSE` in any operator reachable from an

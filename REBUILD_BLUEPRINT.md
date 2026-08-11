@@ -268,6 +268,57 @@ status-carrying ancestor map at block creation, as `blockAnc` did for block ids 
 but keyed by `(root, ps)`, since the walk is status-dependent and `blockAnc` over
 bare ids cannot express it.
 
+### 1.6 `get_filtered_block_tree` — when it is safe to omit
+
+`get_head` descends over `get_filtered_block_tree(store)`, not over all blocks, so
+pruning happens *before* node expansion and a pruned block contributes no nodes at
+all. The pruning logic is `filter_block_tree` (`phase0/fork-choice.md`, unmodified
+in Gloas):
+
+```python
+correct_justified = (
+    store.justified_checkpoint.epoch == GENESIS_EPOCH
+    or voting_source.epoch == store.justified_checkpoint.epoch
+    or voting_source.epoch + 2 >= current_epoch
+)
+correct_finalized = (
+    store.finalized_checkpoint.epoch == GENESIS_EPOCH
+    or store.finalized_checkpoint.root == finalized_checkpoint_block
+)
+if correct_justified and correct_finalized:
+    blocks[block_root] = block
+    return True
+return False
+```
+
+The filter is **purely an FFG viability check** — it prunes branches whose
+justified/finalized checkpoints disagree with the store. It has nothing to do with
+payload status, weight, or the PTC.
+
+**Both guards short-circuit to TRUE at `GENESIS_EPOCH`.** With
+`SLOTS_PER_EPOCH = 32` and `MaxSlot <= 4`, a bounded model never leaves the genesis
+epoch, so `store.justified_checkpoint.epoch == store.finalized_checkpoint.epoch ==
+GENESIS_EPOCH`, every branch is viable, and **`get_filtered_block_tree` is the
+identity function.**
+
+So:
+
+- **`MaxSlot < 32`: omit it.** Sound, with the condition stated, not assumed.
+- **`MaxSlot >= 32` or any inductive invariant reasoning about arbitrary reachable
+  states: it must be modelled.** An `IndInv` proved without it would be proved over
+  an unfiltered tree, and would not correspond to the protocol. This is the single
+  largest obstacle to §2.1's inductive-invariant plan, because `IndInv` quantifies
+  over states with no epoch bound.
+
+```tla
+\* Valid only while MaxSlot < SlotsPerEpoch; assert it, do not assume it.
+ASSUME WithinGenesisEpoch == MaxSlot < 32
+ViableBlocks == blocks          \* identity under the assumption above
+```
+
+Modelling it properly needs justified and finalized checkpoints as state, which the
+current design has no representation of.
+
 ---
 
 ## 2. Scaling
@@ -473,8 +524,9 @@ claims that were false.
 - ~~`get_attestation_score` unread.~~ **RESOLVED** — read at `phase0:323`, see §1.5.
   It invalidated the `votes`-as-nodes design and exposed a v1 equivocator
   double-count. This is why §6 exists.
-- `get_filtered_block_tree` prunes non-viable branches before the descent. Unread,
-  unmodelled, and it may remove exactly the branches an attack needs.
+- ~~`get_filtered_block_tree` unread.~~ **RESOLVED** — read at
+  `phase0/fork-choice.md`, unmodified in Gloas. See §1.6: safely omitted below one
+  epoch, mandatory above it.
 - `should_apply_proposer_boost` has a third clause past what is quoted above.
 - Whether `IndInv` can be strengthened to inductive at all here is unknown. If it
   cannot, multi-slot claims stay out of reach and the honest report says so.

@@ -28,7 +28,15 @@ CONSTANTS
     \* @type: Int;
     CurrentSlot,
     \* @type: Int;
-    MaxDepth          \* bounds the id/slot range only; no walk to bound now
+    MaxDepth,         \* bounds the id/slot range only; no walk to bound now
+    \* @type: Int;
+    \* ABSOLUTE reorg-head threshold. calculate_committee_fraction computes
+    \*   (total_active_balance // SLOTS_PER_EPOCH) * REORG_HEAD_WEIGHT_THRESHOLD // 100
+    \* which at model scale is (3 // 32) * 20 // 100 = 0, making is_head_weak
+    \* (weight < 0) unsatisfiable and silently disabling every mechanism gated on
+    \* it. That is D1, and it made ProposeHonestReorg dead code through every v1
+    \* run. Rescaled to an absolute count here; VAC_HeadWeak proves it fires.
+    ReorgHeadWeightAbs
 
 \* PAYLOAD_STATUS_* , gloas/fork-choice.md table
 EMPTY   == 0
@@ -76,11 +84,25 @@ VARIABLES
     \* @type: $node;      get_head's result, carried rather than computed
     head,
     \* @type: Set($node); justified root .. head inclusive. See HeadCertified.
-    headPath
+    headPath,
+    \* @type: Int -> Str;  block proposer, for the equivocation gate
+    proposer,
+    \* @type: Set(Int);
+    \* ABSTRACTION. filter_block_tree calls a leaf viable when correct_justified
+    \* and correct_finalized both hold. Those need epochs, justification and
+    \* get_voting_source, none of which are modelled. This carries leaf viability
+    \* as an UNCONSTRAINED subset of block-level leaves instead, so the solver
+    \* ranges over every possible viability assignment and results hold for all
+    \* of them. The filtering STRUCTURE is exact; the viability PREDICATE is not
+    \* modelled at all, and this variable is where that gap is named.
+    viableLeaf,
+    \* @type: Set(Int);   get_filtered_block_tree's result. See FilteredClosure.
+    filtered
 
 vars == << blocks, blockSlot, blockParent, parentStatus, payloadVerified,
            ptcTimely, daAvailable, latestMsg, equivocators, boostRoot,
-           boostApplies, nodeAnc, head, headPath >>
+           boostApplies, nodeAnc, head, headPath, proposer, viableLeaf,
+           filtered >>
 
 ASSUME ValidatorsNonEmpty == Validators # {}
 ASSUME ByzSubset          == ByzValidators \subseteq Validators
@@ -182,6 +204,34 @@ BoostNode == [root |-> boostRoot, ps |-> PENDING]
 \* @type: ($node) => Bool;
 BoostInSubtree(n) == boostRoot # 0 /\ NodeInSubtree(BoostNode, n)
 
+\* is_head_weak, gloas. Attestation score on the PENDING node PLUS the
+\* equivocator balances added back -- get_attestation_score excludes them, and
+\* this loop restores them. Unit balances, so the add-back is a count.
+\* Threshold is ABSOLUTE; see ReorgHeadWeightAbs for why the spec's percentage
+\* cannot be used at model scale.
+\* @type: (Int) => Bool;
+IsHeadWeak(r) ==
+    AttScore([root |-> r, ps |-> PENDING]) + Cardinality(equivocators)
+        < ReorgHeadWeightAbs
+
+\* should_apply_proposer_boost, gloas. Boost is SUPPRESSED only under a
+\* four-way conjunction: boostRoot set, AND parent from the previous slot, AND
+\* parent weak, AND a PTC-timely same-slot same-proposer equivocation exists.
+\* Reading it as "equivocation implies no boost" drops the middle two and yields
+\* a strictly stronger adversary than the protocol.
+\* @type: () => Bool;
+ShouldApplyProposerBoost ==
+    IF boostRoot = 0 THEN FALSE
+    ELSE LET par == blockParent[boostRoot]
+             sl  == blockSlot[boostRoot]
+         IN IF blockSlot[par] + 1 < sl THEN TRUE
+            ELSE IF ~IsHeadWeak(par)   THEN TRUE
+            ELSE ~\E r \in blocks :
+                    /\ r \in ptcTimely
+                    /\ proposer[r] = proposer[par]
+                    /\ blockSlot[r] + 1 = sl
+                    /\ r # par
+
 \* get_weight, gloas:521. No payload term exists -- that absence is D5.
 \* @type: ($node) => Int;
 Weight(n) ==
@@ -219,6 +269,38 @@ Precedes(a, b) ==
 (* The alternating tree                                                     *)
 (***************************************************************************)
 
+(***************************************************************************)
+(* get_filtered_block_tree / filter_block_tree, phase0.                     *)
+(*                                                                          *)
+(* The spec is a recursive DFS: a block with children is viable iff ANY child *)
+(* is viable; a LEAF is viable iff correct_justified and correct_finalized.  *)
+(* Viability therefore propagates strictly upward from leaves, which means   *)
+(*                                                                          *)
+(*   b is in the filtered tree  <=>  some viable leaf has b on its path      *)
+(*                                                                          *)
+(* and that is expressible with the ancestry already in state -- no          *)
+(* recursion, which Apalache rejects anyway. Carried as `filtered` and pinned *)
+(* by FilteredClosure, the same pattern as nodeAnc, so NodeChildren pays only *)
+(* a set membership.                                                        *)
+(***************************************************************************)
+
+\* @type: (Int) => Set(Int);
+BlockChildren(r) == { b \in blocks : b # Genesis /\ blockParent[b] = r }
+
+\* @type: (Int) => Bool;
+IsBlockLeaf(r) == BlockChildren(r) = {}
+
+\* @type: (Int) => Set(Int);
+AncRoots(b) == { a.root : a \in nodeAnc[b] }
+
+FilteredClosure ==
+    \A b \in blocks :
+        (b \in filtered) <=>
+            \E l \in blocks :
+                /\ IsBlockLeaf(l)
+                /\ l \in viableLeaf
+                /\ (l = b \/ b \in AncRoots(l))
+
 \* get_node_children, gloas. A PENDING node yields EMPTY always and FULL only
 \* when the payload is verified. An EMPTY/FULL node yields PENDING nodes for
 \* child blocks that DECLARED that status as their parent's -- so a child
@@ -229,8 +311,14 @@ NodeChildren(n) ==
     THEN { [root |-> n.root, ps |-> EMPTY] }
          \union (IF n.root \in payloadVerified
                  THEN { [root |-> n.root, ps |-> FULL] } ELSE {})
+    \* `for root in blocks` in the spec iterates get_filtered_block_tree's
+    \* result, NOT store.blocks. Ranging over every block instead lets get_head
+    \* descend into branches the protocol has pruned. The PENDING branch above
+    \* is deliberately unfiltered, matching the spec: its root reached this point
+    \* through an already-filtered step.
     ELSE { [root |-> c, ps |-> PENDING] :
              c \in { b \in blocks : /\ b # Genesis
+                                    /\ b \in filtered
                                     /\ blockParent[b] = n.root
                                     /\ parentStatus[b] = n.ps } }
 
@@ -280,6 +368,9 @@ NodeParent(n) ==
 \* @type: () => Bool;
 HeadCertified ==
     /\ headPath \subseteq AllNodes
+    /\ filtered \subseteq blocks
+    /\ viableLeaf \subseteq blocks
+    /\ proposer \in [Ids -> Validators]
     /\ GenesisNode \in headPath
     /\ head \in headPath
     \* head is a leaf: get_head stops where there are no children
@@ -315,6 +406,9 @@ TypeOK ==
     /\ \A b \in Ids : \A a \in nodeAnc[b] : a.root \in Ids /\ a.ps \in {EMPTY, FULL}
     /\ head \in AllNodes
     /\ headPath \subseteq AllNodes
+    /\ filtered \subseteq blocks
+    /\ viableLeaf \subseteq blocks
+    /\ proposer \in [Ids -> Validators]
 
 \* S4. The two payload nodes of one root are never both canonical. Structural,
 \* cheap, and independent of any weight -- the first thing to check because it
@@ -389,6 +483,11 @@ VAC_TiebreakerZero     == \A n \in AllNodes : Tiebreaker(n) # 0
 \* vacuously over what remains. That is the exact failure this repository exists
 \* to avoid, so the certificate must be probed as hard as the properties.
 \* All three are deliberately false and MUST report VIOLATED.
+\* GATE PROBES. Each is deliberately false and MUST report VIOLATED.
+VAC_FilteredPrunes == \A b \in blocks : b \in filtered   \* filtering really prunes
+VAC_HeadWeak       == \A b \in blocks : ~IsHeadWeak(b)   \* D1: threshold fires
+VAC_BoostSuppressed== boostRoot = 0 \/ boostApplies       \* suppression reachable
+
 VAC_HeadDeep      == blockSlot[head.root] = 0        \* head can leave genesis
 VAC_HeadFull      == head.ps # FULL                  \* a FULL node can be head
 VAC_MultiBlock    == blocks = {Genesis}              \* trees can be non-trivial

@@ -14,6 +14,11 @@ All on Mini-3, Apalache 0.61.0, `JVM_ARGS=-Xmx12g`, config
 apalache-mc check --cinit=ConstInit --init=Init --next=Next --inv=<INV> --length=0 MCEPBSNodes.tla
 ```
 
+> This table is the **pre-rewrite** baseline that §1.1 compares against.
+> `AncestorWalkTerminates` no longer exists in the module — M2 deleted the
+> unrolling it guarded, and `AncClosure` + `AncRootsUnique` replace it. Do not
+> try to run it against current `EPBSNodes.tla`.
+
 | Check | Result | Wall clock | Touches `ChainHead`? |
 |---|---|---|---|
 | `typecheck` | OK, all expressions typed | 0.4 s | — |
@@ -102,8 +107,41 @@ rewrite did not fix it, which retroactively identifies the cause: the bottleneck
 was never the block-id encoding. It is computing a global fork-choice head inside
 an invariant.
 
-**Mandate M1.** `EPBSMultiSlotV2` MUST NOT contain `CHOOSE` in any operator
-reachable from an invariant. The head is carried as state and validated locally.
+### §1.1 The `nodeAnc` rewrite: measured, and it did not fix `S4`
+
+M2 (§2) was implemented and re-measured at identical bounds and heap.
+
+| Check | Pre-rewrite | Post-rewrite |
+|---|---|---|
+| `TypeOK` | HOLDS ~2 s | **HOLDS 3 s** |
+| `S5_ChildAttachesToOneBranch` | HOLDS ~2 s | **HOLDS 2 s** |
+| `S6_FullImpliesVerified` | HOLDS ~2 s | **HOLDS 2 s** |
+| `VAC_BoostReachesDescendant` | VIOLATED 4 s | **VIOLATED 2 s** |
+| `AncRootsUnique` | n/a | **HOLDS 2 s** |
+| `S4_PayloadStatusExclusive` | OOM at ~6 s | **OOM at 877 s** |
+
+MEASURED. Removing `AncestorAt` bought roughly 150x more time before the heap
+filled and **did not change the outcome.** The prediction that smaller terms
+would fit in 12 GB was wrong.
+
+**But the isolation is now conclusive.** The concern that
+`nodeAnc \in [Ids -> SUBSET AncUniverse]` — a function space of size 1024^5 if
+expanded — had merely traded one blow-up for another is refuted: every invariant
+that avoids `ChainHead` still completes in 2-3 s *with that encoding active*.
+Apalache handles it symbolically. Therefore `CHOOSE` over `IsHead` is the **sole**
+cause of the S4 heap exhaustion, established by isolation rather than inferred
+from shape.
+
+What the rewrite did buy, all MEASURED: semantics preserved (`S5`, `S6` and the
+boost probe unchanged), `AncRootsUnique` holds — so `NodeInSubtree` matching on
+root really is equivalent to `get_ancestor` matching on slot, making it a faithful
+transcription rather than an approximation — and the depth ceiling is gone, since
+nothing unrolls any more.
+
+**Mandate M1 is therefore not a recommendation but a measured necessity.**
+`EPBSMultiSlotV2` MUST NOT contain `CHOOSE` in any operator reachable from an
+invariant. The head is carried as state and validated locally (§3, M3). M3 is now
+the critical path: it is the only remaining candidate fix for `S4`.
 
 ---
 

@@ -54,6 +54,14 @@ Init ==
     /\ boostApplies \in BOOLEAN
     /\ latestMsg \in [Validators -> [slot: Slots, root: Ids, present: BOOLEAN]]
     /\ \A v \in Validators : latestMsg[v].root \in blocks
+    \* Ancestry is admitted DECLARATIVELY, not constructed. nodeAnc ranges over
+    \* every candidate assignment and AncClosure pins it to exactly the recursion
+    \* get_ancestor would have performed. This is the whole point of the rewrite:
+    \* the solver constrains ancestry once here instead of the rewriter inlining
+    \* a four-step walk into every weight evaluation inside IsHead.
+    /\ nodeAnc \in [Ids -> SUBSET AncUniverse]
+    /\ AncClosure
+    /\ \A b \in Ids \ blocks : nodeAnc[b] = {}
 
 Next == UNCHANGED vars
 

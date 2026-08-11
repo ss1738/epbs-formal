@@ -28,7 +28,7 @@ CONSTANTS
     \* @type: Int;
     CurrentSlot,
     \* @type: Int;
-    MaxDepth          \* bounds the ancestor walk; see AncestorAt
+    MaxDepth          \* bounds the id/slot range only; no walk to bound now
 
 \* PAYLOAD_STATUS_* , gloas/fork-choice.md table
 EMPTY   == 0
@@ -65,25 +65,37 @@ VARIABLES
     \* @type: Int;             store.proposer_boost_root, 0 = Root()
     boostRoot,
     \* @type: Bool;            should_apply_proposer_boost, a Store property
-    boostApplies
+    boostApplies,
+    \* @type: Int -> Set($node);
+    \* STRICT node-ancestors of any node with this root, nearest-first order
+    \* irrelevant (it is a set). Indexed by ROOT, not by node, because
+    \* get_ancestor's first step leaves the current root regardless of payload
+    \* status -- so all three nodes of one root share an ancestor set.
+    \* Written once at block insertion; see AncClosure.
+    nodeAnc
 
 vars == << blocks, blockSlot, blockParent, parentStatus, payloadVerified,
            ptcTimely, daAvailable, latestMsg, equivocators, boostRoot,
-           boostApplies >>
+           boostApplies, nodeAnc >>
 
 ASSUME ValidatorsNonEmpty == Validators # {}
 ASSUME ByzSubset          == ByzValidators \subseteq Validators
-\* AncestorAt unrolls exactly four Step applications. Pinning MaxDepth here makes
-\* any attempt to deepen the model fail at parse time instead of truncating the
-\* ancestor walk in silence.
-ASSUME UnrollingCoversDepth == MaxDepth = 4
+\* MaxDepth no longer bounds an unrolled walk -- ancestry is state now, so there
+\* is no recursion to unroll and no depth ceiling. It bounds only the id/slot
+\* range below, and may be raised freely.
+ASSUME DepthOK == MaxDepth = 4
 
 \* Apalache requires a LITERAL constant range in [a..b]; it will not accept
-\* 0..MaxDepth. These are therefore written out. ASSUME UnrollingCoversDepth
-\* above is what keeps them in sync with MaxDepth -- change one without the
+\* 0..MaxDepth. ASSUME DepthOK keeps these in sync -- change one without the
 \* other and the ASSUME fails at parse time.
 Ids   == 0 .. 4
 Slots == 0 .. 4
+
+\* Every node that may legitimately appear in an ancestor set. Strict ancestors
+\* always carry a DECLARED status, never PENDING -- get_ancestor replaces the
+\* status at each step with get_parent_payload_status, which returns FULL or
+\* EMPTY only.
+AncUniverse == { [root |-> r, ps |-> q] : r \in Ids, q \in {EMPTY, FULL} }
 
 -----------------------------------------------------------------------------
 (***************************************************************************)
@@ -99,48 +111,45 @@ SupportedNode(m) ==
     THEN [root |-> m.root, ps |-> IF m.present THEN FULL ELSE EMPTY]
     ELSE [root |-> m.root, ps |-> PENDING]
 
-\* get_ancestor, gloas. The parent reached is (parent_root, parentStatus),
-\* NOT (parent_root, PENDING) -- payload status is carried up the walk.
-\*
-\* The spec form is recursive. Apalache rejects RECURSIVE, so this is an
-\* explicit unrolling of FOUR steps -- written out, not parameterised, because
-\* TLA+ cannot iterate an operator a constant number of times without recursion.
-\*
-\* This is sound only while no chain exceeds 4 blocks. That is not a comment,
-\* it is an obligation: ASSUME UnrollingCoversDepth below pins MaxDepth = 4, and
-\* AncestorWalkTerminates asserts the walk reached a fixpoint rather than
-\* silently stopping mid-chain. Raising MaxDepth REQUIRES adding steps here.
-\* v1 had exactly this shape with no such check and the walk truncated silently.
-\* @type: ($node) => $node;
-ParentNode(n) == [root |-> blockParent[n.root], ps |-> parentStatus[n.root]]
+(***************************************************************************)
+(* Ancestry -- STATE, not a walk.                                           *)
+(*                                                                          *)
+(* get_parent_payload_status reads only block-body fields fixed at signing:  *)
+(*                                                                          *)
+(*   parent_block_hash = block.body.signed_execution_payload_bid            *)
+(*                            .message.parent_block_hash                    *)
+(*   message_block_hash = parent.body.signed_execution_payload_bid          *)
+(*                             .message.block_hash                          *)
+(*   return FULL if parent_block_hash == message_block_hash else EMPTY      *)
+(*                                                                          *)
+(* It reads NO mutable store state. So the node-path from the justified root *)
+(* to a block is fixed the moment the block is signed and never changes.    *)
+(* v1 recomputed it inside every weight evaluation; that is what inlined an  *)
+(* ancestor walk four levels deep into IsHead and exhausted a 12GB heap      *)
+(* during constraint construction.                                          *)
+(***************************************************************************)
 
-\* @type: ($node, Int) => $node;
-Step(n, s) == IF blockSlot[n.root] =< s THEN n ELSE ParentNode(n)
-
-\* @type: ($node, Int) => $node;
-AncestorAt(n, s) ==
-    LET a1 == Step(n,  s)
-        a2 == Step(a1, s)
-        a3 == Step(a2, s)
-        a4 == Step(a3, s)
-    IN  a4
-
-\* is_ancestor, gloas. NOT record equality. The spec compares roots, then accepts
-\* EITHER a payload-status match OR a PENDING target:
-\*
-\*   return (node_ancestor.payload_status == ancestor.payload_status
-\*           or ancestor.payload_status == PAYLOAD_STATUS_PENDING)
-\*
-\* That second disjunct is load-bearing. get_ancestor carries the DECLARED parent
-\* status up the walk, so it never yields PENDING for a strict ancestor. Writing
-\* this as equality therefore makes every PENDING target unreachable -- and
-\* BoostNode is (boostRoot, PENDING), so proposer boost would propagate to
-\* nothing. A PENDING target is a wildcard over payload status, by design.
+\* is_ancestor, gloas. Root must match; payload status must match OR the target
+\* is PENDING, which is a wildcard over status. See the finding note below.
 \* @type: ($node, $node) => Bool;
-NodeInSubtree(vNode, target) ==
-    LET a == AncestorAt(vNode, blockSlot[target.root]) IN
+NodeMatches(a, target) ==
     /\ a.root = target.root
     /\ (a.ps = target.ps \/ target.ps = PENDING)
+
+\* is_ancestor over the stored ancestor set. Each root appears at most once in
+\* nodeAnc, so matching on root is equivalent to get_ancestor's match on slot,
+\* without the walk.
+\*
+\* THE PENDING WILDCARD IS LOAD-BEARING. get_ancestor carries the DECLARED
+\* parent status upward and never yields PENDING for a strict ancestor, so
+\* writing this as record equality makes every PENDING target unreachable --
+\* and BoostNode is (boostRoot, PENDING), so proposer boost would propagate to
+\* nothing. That bug typechecked cleanly and passed S5 and S6.
+\* VAC_BoostReachesDescendant is the only check that distinguishes them.
+\* @type: ($node, $node) => Bool;
+NodeInSubtree(v, target) ==
+    \/ NodeMatches(v, target)
+    \/ \E a \in nodeAnc[v.root] : NodeMatches(a, target)
 
 -----------------------------------------------------------------------------
 (***************************************************************************)
@@ -261,6 +270,7 @@ TypeOK ==
     /\ payloadVerified \subseteq blocks
     /\ equivocators \subseteq Validators
     /\ boostRoot \in blocks \union {0}
+    /\ \A b \in Ids : \A a \in nodeAnc[b] : a.root \in Ids /\ a.ps \in {EMPTY, FULL}
 
 \* S4. The two payload nodes of one root are never both canonical. Structural,
 \* cheap, and independent of any weight -- the first thing to check because it
@@ -283,15 +293,24 @@ S5_ChildAttachesToOneBranch ==
 S6_FullImpliesVerified ==
     \A n \in AllNodes : n.ps = FULL => n.root \in payloadVerified
 
-\* The four-step unrolling in AncestorAt actually reached a fixpoint. If a chain
-\* is longer than the unrolling, AncestorAt returns a MID-CHAIN node and every
-\* NodeInSubtree answer built on it is quietly wrong -- no error, just false
-\* results, which is the failure mode that produced v1's phantom conclusions.
-\* This must be checked alongside every other invariant, never on its own.
-AncestorWalkTerminates ==
-    \A n \in AllNodes :
-        \A s \in Slots :
-            Step(AncestorAt(n, s), s) = AncestorAt(n, s)
+\* The obligation that REPLACES the old AncestorWalkTerminates. nodeAnc is state,
+\* so nothing recomputes it -- which means nothing catches it being wrong. This
+\* pins it to exactly the recursion get_ancestor would have performed:
+\*   ancestors(b) = ancestors(parent) + {(parent, declared status of b)}
+\* Unlike the unrolling it replaces, this has no depth ceiling.
+AncClosure ==
+    /\ nodeAnc[Genesis] = {}
+    /\ \A b \in blocks :
+         b # Genesis =>
+            nodeAnc[b] = nodeAnc[blockParent[b]]
+                         \union { [root |-> blockParent[b], ps |-> parentStatus[b]] }
+
+\* Each root appears at most once as an ancestor. This is what makes matching on
+\* root equivalent to get_ancestor's matching on slot, and it must hold for
+\* NodeInSubtree to be a faithful transcription rather than an approximation.
+AncRootsUnique ==
+    \A b \in blocks :
+        \A a1, a2 \in nodeAnc[b] : a1.root = a2.root => a1 = a2
 
 -----------------------------------------------------------------------------
 (***************************************************************************)

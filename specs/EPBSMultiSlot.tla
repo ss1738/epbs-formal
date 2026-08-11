@@ -52,9 +52,9 @@ CONSTANTS
     \* @type: Int;
     MaxAdvActions,
     \* @type: Int;
-    ReorgHeadWeightPct,
+    ReorgHeadWeightAbs,
     \* @type: Int;
-    ReorgParentWeightPct
+    ReorgParentWeightAbs
 
 ASSUME ByzSubset   == ByzValidators \subseteq Validators
 ASSUME SlotOK      == MaxSlot \in Nat /\ MaxSlot >= 2 /\ MaxSlot =< 4
@@ -63,7 +63,24 @@ ASSUME BudgetOK    == MaxAdvActions \in Nat
 \* configs/mainnet.yaml: REORG_HEAD_WEIGHT_THRESHOLD = 20,
 \* REORG_PARENT_WEIGHT_THRESHOLD = 160, PROPOSER_SCORE_BOOST = 40.
 \* calculate_committee_fraction: (committee_weight * pct) // 100.
-ASSUME ReorgPctOK  == ReorgHeadWeightPct \in Nat /\ ReorgParentWeightPct \in Nat
+\* configs/mainnet.yaml gives REORG_HEAD_WEIGHT_THRESHOLD=20 and
+\* REORG_PARENT_WEIGHT_THRESHOLD=160 as PERCENTAGES of
+\* calculate_committee_fraction = get_total_active_balance // SLOTS_PER_EPOCH,
+\* i.e. of ONE SLOT's committee, roughly 1/32 of the validator set.
+\*
+\* Encoding that as a percentage of Cardinality(Validators) was wrong and
+\* silently fatal: at 4 validators Frac(20) = (4*20) \div 100 = 0, so
+\* IsHeadWeak (weight < 0) was unsatisfiable, and Frac(160) = 6 > any
+\* achievable BaseWeight, so IsParentStrong was too. HonestMayReorg was
+\* therefore always FALSE and ProposeHonestReorg was dead code in every run
+\* reported before this commit.
+\*
+\* At this scale the percentage form has no faithful encoding, so the
+\* thresholds are absolute validator counts standing in for it.
+ASSUME ReorgAbsOK ==
+    /\ ReorgHeadWeightAbs   \in 0 .. Cardinality(Validators)
+    /\ ReorgParentWeightAbs \in 0 .. Cardinality(Validators)
+
 
 HonestValidators == Validators \ ByzValidators
 
@@ -74,6 +91,9 @@ Genesis   == 0
 NoVote    == -1
 MaxBlockId == 2 * MaxSlot
 BlockIds  == 0 .. MaxBlockId
+\* BlockHash is injective only while MaxBlockId < 13; a collision would let
+\* IsGhostHead admit two heads and CHOOSE would silently pick one.
+ASSUME HashInjective == MaxBlockId < 13
 
 VARIABLES
     \* @type: Int;
@@ -127,11 +147,20 @@ BaseWeight(b) == Cardinality({ v \in Validators : Supports(v, b) })
 \* EIP-7732 gives a block extra fork-choice weight when the PTC judged its
 \* payload present. This is the coupling the review said was unreachable:
 \* a committee verdict feeding directly into fork-choice weight.
-PayloadWeight(b) == IF ptcVerdict[b] = "present" THEN PayloadBoost ELSE 0
+\* get_weight adds proposer_score when the boost root is a DESCENDANT-OR-SELF of
+\* the node, so a boost accrues to every ancestor's subtree weight. Both boosts
+\* previously applied only at the boosted block itself, which biased fork choice
+\* against deep boosted branches -- precisely the shape that would suppress a
+\* timely-reorg counterexample.
+InSubtree(x, b) == x = b \/ b \in blockAnc[x]
 
-\* Proposer boost applies to a block proposed in the CURRENT slot.
+PayloadWeight(b) ==
+    IF \E x \in blocks : InSubtree(x, b) /\ ptcVerdict[x] = "present"
+    THEN PayloadBoost ELSE 0
+
 BoostWeight(b) ==
-    IF blockSlot[b] = slot /\ b \in designated THEN ProposerBoost ELSE 0
+    IF \E x \in blocks : InSubtree(x, b) /\ blockSlot[x] = slot /\ x \in designated
+    THEN ProposerBoost ELSE 0
 
 Weight(b) == BaseWeight(b) + PayloadWeight(b) + BoostWeight(b)
 
@@ -202,14 +231,11 @@ EquivWeight(b) ==
 (* safety, unsound for liveness claims.                                     *)
 (***************************************************************************)
 
-CommitteeWeight == Cardinality(Validators)
-Frac(pct) == (CommitteeWeight * pct) \div 100
-
 \* is_head_weak: head_weight < calculate_committee_fraction(REORG_HEAD_WEIGHT_THRESHOLD)
-IsHeadWeak(h) == BaseWeight(h) + EquivWeight(h) < Frac(ReorgHeadWeightPct)
+IsHeadWeak(h) == BaseWeight(h) + EquivWeight(h) < ReorgHeadWeightAbs
 
 \* is_parent_strong: parent_weight > calculate_committee_fraction(REORG_PARENT_WEIGHT_THRESHOLD)
-IsParentStrong(h) == BaseWeight(blockParent[h]) > Frac(ReorgParentWeightPct)
+IsParentStrong(h) == BaseWeight(blockParent[h]) > ReorgParentWeightAbs
 
 \* single_slot_reorg: parent.slot + 1 == head.slot AND head.slot + 1 == current
 SingleSlotReorg(h) ==
@@ -553,6 +579,10 @@ VACUITY_WithholdingHappens ==
 
 \* Violation => a withheld batch was actually published.
 VACUITY_ReleaseHappens == advUsed = 0 \/ privateBlocks = {}
+
+\* Violation => an honest proposer actually performs a spec-sanctioned reorg.
+\* D1 made this dead code; without this probe it could die again unnoticed.
+VACUITY_HonestReorgHappens == \A h \in blocks : ~HonestMayReorg(h)
 
 \* Violation => equivocation occurs.
 VACUITY_EquivocationHappens == equivocators = {}

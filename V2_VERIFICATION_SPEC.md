@@ -138,6 +138,46 @@ root really is equivalent to `get_ancestor` matching on slot, making it a faithf
 transcription rather than an approximation — and the depth ceiling is gone, since
 nothing unrolls any more.
 
+### §1.2 M3 implemented: `S4` verified, heap wall gone
+
+`CHOOSE` removed; `head` and `headPath` carried as state and constrained by
+`HeadCertified` (§3). Same bounds, same heap.
+
+| Check | Pre-M3 | Post-M3 |
+|---|---|---|
+| `S4_PayloadStatusExclusive` | **OOM at 877 s** | **HOLDS, 49 s** |
+| `TypeOK` | HOLDS 3 s | HOLDS 48 s |
+| `AncRootsUnique` | HOLDS 2 s | HOLDS 50 s |
+| `S5_ChildAttachesToOneBranch` | HOLDS 2 s | HOLDS 46 s |
+| `S6_FullImpliesVerified` | HOLDS 2 s | HOLDS 50 s |
+| `VAC_BoostReachesDescendant` | VIOLATED 2 s | VIOLATED 53 s |
+| `VAC_MultiBlock` | n/a | VIOLATED 50 s |
+| `VAC_HeadDeep` | n/a | VIOLATED 52 s |
+| `VAC_HeadFull` | n/a | VIOLATED 52 s |
+
+MEASURED. **This is the repository's first successful check of a fork-choice head
+property.** M1/M3 were the fix; the diagnosis held.
+
+The cost moved rather than vanished: every check now pays ~46-53 s because
+`HeadCertified` sits in `Init` and is therefore part of every state constraint.
+Trading 2 s for 50 s on the cheap invariants to convert an OOM into a verdict is
+the right trade, but it is a real regression on the others and it will matter
+once actions multiply the state constraint per transition.
+
+**The certificate does not over-constrain the domain.** `VAC_MultiBlock`,
+`VAC_HeadDeep` and `VAC_HeadFull` all VIOLATE, so trees are non-trivial, the head
+leaves genesis, and a FULL node can be head. Without those three, `S4` holding
+would be worthless: `HeadCertified` is asserted inside `Init`, so an
+unsatisfiable certificate would silently delete trees from the domain and every
+invariant would hold over the remainder.
+
+**OPEN: what forces `S4` is not understood.** The obvious hypothesis was that it
+restates `HeadCertified`'s at-most-one-child-on-the-path conjunct. Tested by
+deleting that conjunct and re-running: `S4` still HOLDS (52 s). So it has content
+beyond that constraint, but no account of *what* content, and "holds at these
+bounds" is not "holds". Do not cite `S4` as a protocol property until the
+mechanism is identified.
+
 **Mandate M1 is therefore not a recommendation but a measured necessity.**
 `EPBSMultiSlotV2` MUST NOT contain `CHOOSE` in any operator reachable from an
 invariant. The head is carried as state and validated locally (§3, M3). M3 is now

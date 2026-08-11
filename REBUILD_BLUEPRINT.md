@@ -115,8 +115,10 @@ VARIABLES
     ptcVerdict,
     \* @type: Int -> Str;           data availability verdict, separate per spec
     daVerdict,
-    \* @type: Str -> $node;         LMD latest message, now a NODE not a block
-    votes,
+    \* @type: Str -> { slot: Int, root: Int, present: Bool };
+    latestMsg,                      \* store.latest_messages; node derived, see §1.5
+    \* @type: Set(Str);             store.equivocating_indices
+    equivocators,
     \* @type: Int;                  store.proposer_boost_root, 0 = none
     boostRoot,
     \* @type: $node;                cached head, see §2.2
@@ -124,10 +126,10 @@ VARIABLES
     ...
 ```
 
-**`votes` maps validators to nodes, not blocks.** `get_attestation_score` scores a
-node, and an attestation for `(r, FULL)` does not support `(r, EMPTY)`. Collapsing
-votes to block roots — as the old model did — erases the distinction the entire
-payload-status mechanism rests on.
+**Validators store MESSAGES, not nodes.** An earlier draft of this blueprint had
+`votes : Str -> $node`. That was wrong. `LatestMessage` is
+`{slot, root, payload_present}` (`gloas:150`) and the node is *derived* per §1.5.
+Storing the node directly would freeze a resolution that the spec recomputes.
 
 **`parentStatus` is a first-class variable.** `get_parent_payload_status` compares
 the block's bid `parent_block_hash` against the parent's `block_hash`. Abstracted:
@@ -163,8 +165,11 @@ IsPrevSlotPayloadDecision(n) ==
     /\ blockSlot[n.root] + 1 = slot
     /\ n.ps \in {EMPTY, FULL}
 
-\* Attestation score: validators whose latest message is in this node's subtree.
-AttScore(n) == Cardinality({ v \in Validators : NodeInSubtree(votes[v], n) })
+\* See §1.5: equivocators excluded, support is subtree containment.
+AttScore(n) ==
+    Cardinality({ v \in Validators :
+        /\ v \notin equivocators
+        /\ NodeInSubtree(SupportedNode(latestMsg[v]), n) })
 
 Weight(n) ==
     IF IsPrevSlotPayloadDecision(n) THEN 0          \* <-- the zeroing rule
@@ -189,6 +194,79 @@ Tiebreaker(n) ==
 fork choice. Model `ptcVerdict` and `daVerdict` separately: the spec has
 `PAYLOAD_TIMELY_THRESHOLD` and `DATA_AVAILABILITY_TIMELY_THRESHOLD` as distinct
 `PTC_SIZE // 2` gates, and conflating them removes a degree of adversarial freedom.
+
+### 1.5 Vote-to-node resolution — verified against the spec
+
+`get_supported_node` (`gloas/fork-choice.md:390`):
+
+```python
+block = store.blocks[message.root]
+if block.slot < message.slot:
+    payload_status = FULL if message.payload_present else EMPTY
+else:
+    payload_status = PENDING
+return ForkChoiceNode(root=message.root, payload_status=payload_status)
+```
+
+**Attest in the same slot as the block and you support `PENDING`; attest in a later
+slot and you support `FULL` or `EMPTY` per the flag you carried.** The resolution is
+dynamic and slot-relative.
+
+```tla
+SupportedNode(m) ==
+    IF blockSlot[m.root] < m.slot
+    THEN [root |-> m.root, ps |-> IF m.present THEN FULL ELSE EMPTY]
+    ELSE [root |-> m.root, ps |-> PENDING]
+```
+
+`get_attestation_score` (`phase0/fork-choice.md:323`):
+
+```python
+sum(state.validators[i].effective_balance
+    for i in unslashed_and_active_indices
+    if (i in store.latest_messages
+        and i not in store.equivocating_indices          # <-- EXCLUDED
+        and is_ancestor(store, get_supported_node(store, store.latest_messages[i]), node)))
+```
+
+Two things settled here.
+
+**Equivocators are excluded from attestation score entirely.** That is precisely why
+`is_head_weak` adds their effective balance back in its own loop — the score has
+already dropped them. v1 counted equivocators in `BaseWeight` *and* added them again
+in `EquivWeight`, so they were wrongly included on one path and double-counted on
+the other.
+
+**Support is subtree containment, not node equality.** `is_ancestor(store, node,
+ancestor)` is `get_ancestor(store, node, blocks[ancestor.root].slot) == ancestor`,
+and the Gloas `get_ancestor` carries payload status up the walk:
+
+```python
+parent = ForkChoiceNode(root=block.parent_root,
+                        payload_status=get_parent_payload_status(store, block))
+```
+
+So the ancestor reached is `(parent_root, parentStatus)`, **not**
+`(parent_root, PENDING)`, and the final equality compares both fields.
+
+```tla
+AncestorAt(n, s) ==
+    IF blockSlot[n.root] =< s THEN n
+    ELSE AncestorAt([root |-> blockParent[n.root],
+                     ps   |-> parentStatus[n.root]], s)
+
+NodeInSubtree(vNode, target) == AncestorAt(vNode, blockSlot[target.root]) = target
+
+AttScore(n) ==
+    Cardinality({ v \in Validators :
+        /\ v \notin equivocators
+        /\ NodeInSubtree(SupportedNode(latestMsg[v]), n) })
+```
+
+`AncestorAt` is recursive and Apalache dislikes recursion. Precompute a
+status-carrying ancestor map at block creation, as `blockAnc` did for block ids —
+but keyed by `(root, ps)`, since the walk is status-dependent and `blockAnc` over
+bare ids cannot express it.
 
 ---
 
@@ -392,10 +470,9 @@ a phantom weight (D5).
 Stated because the session that produced this document generated five confident
 claims that were false.
 
-- `get_attestation_score` is referenced above but I have not read its body. It
-  determines whether an attestation for `(r, FULL)` supports `(r, PENDING)` or only
-  the exact node. **The whole `votes`-as-nodes design depends on that answer.**
-  Read it before writing `AttScore`.
+- ~~`get_attestation_score` unread.~~ **RESOLVED** — read at `phase0:323`, see §1.5.
+  It invalidated the `votes`-as-nodes design and exposed a v1 equivocator
+  double-count. This is why §6 exists.
 - `get_filtered_block_tree` prunes non-viable branches before the descent. Unread,
   unmodelled, and it may remove exactly the branches an attack needs.
 - `should_apply_proposer_boost` has a third clause past what is quoted above.

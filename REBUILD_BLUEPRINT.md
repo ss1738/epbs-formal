@@ -30,6 +30,31 @@ So one block contributes **two levels** to the fork-choice tree: a payload-statu
 decision, then a block-extension step. A model whose fork-choice depth equals block
 depth is off by a factor of two.
 
+```mermaid
+graph TD
+    subgraph v2["v2 - Gloas, alternating (root, payload_status) nodes"]
+        P1["r1 : PENDING"]
+        E1["r1 : EMPTY"]
+        F1["r1 : FULL<br/>only if is_payload_verified(r1)"]
+        P2a["r2 : PENDING<br/>parentStatus(r2) = EMPTY"]
+        P2b["r3 : PENDING<br/>parentStatus(r3) = FULL"]
+        P1 --> E1
+        P1 -.-> F1
+        E1 --> P2a
+        F1 --> P2b
+    end
+    subgraph v1["v1 - bare block ids (wrong)"]
+        B1["block r1"] --> B2["block r2"]
+    end
+```
+
+**A child block attaches to exactly ONE of the EMPTY or FULL nodes**, never both.
+`get_node_children` filters on `node.payload_status == get_parent_payload_status(
+store, c)`, i.e. on what the child *declares* it builds upon. Above, `r2` builds on
+the empty branch and `r3` on the full branch, and neither is reachable from the
+other. That filter is the mechanism by which a withheld payload orphans its
+descendants, and it is why `parentStatus` is a first-class variable in §1.2.
+
 **The PTC never adds weight.** `get_weight` is:
 
 ```python
@@ -549,7 +574,24 @@ AdvSplitDA(r)            \* daVerdict available, ptcVerdict untimely: drives
                          \* ShouldExtendPayload's first disjunct false
 ```
 
-`AdvLateEnvelope` is the one to build first. It is the closest thing in this
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P1 as Slot N-1 proposer (Byz)
+    participant S as Store
+    participant P2 as Slot N proposer (honest)
+    P1->>S: two TIMELY blocks, same proposer_index, slot N-1
+    Note over S: block_timeliness[root][PTC_TIMELINESS_INDEX] = True<br/>for both
+    P2->>S: proposes normally in slot N, parent = one of them
+    Note over S: should_apply_proposer_boost:<br/>parent.slot + 1 == slot  AND  is_head_weak(parent)<br/>so it reaches the equivocation check
+    S-->>P2: equivocations non-empty -> boost NOT applied
+    Note over P2: honest proposer's weight degraded by<br/>an adversary acting in the PREVIOUS slot
+```
+
+Both preconditions matter: the equivocation clause is only reached when the parent
+is from the previous slot **and** `is_head_weak(parent_root)` holds. An adversary
+that wants this lever must first make the parent weak. `AdvLateEnvelope` is the one
+to build first. It is the closest thing in this
 architecture to the interaction Boris identified, and v1 could not represent it at
 all because it had no notion of a node coming into existence.
 

@@ -26,8 +26,6 @@ CONSTANTS
     \* @type: Int;
     ProposerBoost,
     \* @type: Int;
-    CurrentSlot,
-    \* @type: Int;
     MaxDepth,         \* bounds the id/slot range only; no walk to bound now
     \* @type: Int;
     \* ABSOLUTE reorg-head threshold. calculate_committee_fraction computes
@@ -85,6 +83,11 @@ VARIABLES
     head,
     \* @type: Set($node); justified root .. head inclusive. See HeadCertified.
     headPath,
+    \* @type: Int;
+    \* get_current_slot(store). Was a CONSTANT pinned to 3, which meant every
+    \* result held for exactly one slot value. A variable here generalises all of
+    \* them and is what EPBSMultiSlotV2 advances.
+    slot,
     \* @type: Int -> Str;  block proposer, for the equivocation gate
     proposer,
     \* @type: Set(Int);
@@ -102,7 +105,7 @@ VARIABLES
 vars == << blocks, blockSlot, blockParent, parentStatus, payloadVerified,
            ptcTimely, daAvailable, latestMsg, equivocators, boostRoot,
            boostApplies, nodeAnc, head, headPath, proposer, viableLeaf,
-           filtered >>
+           filtered, slot >>
 
 ASSUME ValidatorsNonEmpty == Validators # {}
 ASSUME ByzSubset          == ByzValidators \subseteq Validators
@@ -195,7 +198,7 @@ AttScore(n) ==
 \* dropping the slot comparison zeroes the weight of every EMPTY/FULL node.
 \* @type: ($node) => Bool;
 IsPrevSlotPayloadDecision(n) ==
-    /\ blockSlot[n.root] + 1 = CurrentSlot
+    /\ blockSlot[n.root] + 1 = slot
     /\ n.ps \in {EMPTY, FULL}
 
 \* @type: () => $node;
@@ -371,6 +374,8 @@ HeadCertified ==
     /\ filtered \subseteq blocks
     /\ viableLeaf \subseteq blocks
     /\ proposer \in [Ids -> Validators]
+    /\ slot \in Slots
+    /\ \A b \in blocks : blockSlot[b] =< slot
     /\ GenesisNode \in headPath
     /\ head \in headPath
     \* head is a leaf: get_head stops where there are no children
@@ -409,6 +414,8 @@ TypeOK ==
     /\ filtered \subseteq blocks
     /\ viableLeaf \subseteq blocks
     /\ proposer \in [Ids -> Validators]
+    /\ slot \in Slots
+    /\ \A b \in blocks : blockSlot[b] =< slot
 
 \* S4. The two payload nodes of one root are never both canonical. Structural,
 \* cheap, and independent of any weight -- the first thing to check because it

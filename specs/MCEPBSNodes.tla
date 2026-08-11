@@ -19,7 +19,6 @@ ConstInit ==
     /\ Validators    = {"v1", "v2", "v3"}
     /\ ByzValidators = {"v3"}
     /\ ProposerBoost = 2
-    /\ CurrentSlot   = 3
     /\ MaxDepth      = 4
     /\ ReorgHeadWeightAbs = 2
 
@@ -64,6 +63,8 @@ Init ==
     /\ \A b \in Ids \ blocks : nodeAnc[b] = {}
     \* The head is admitted freely and constrained by its certificate -- the M3
     \* substitution. No CHOOSE anywhere in the reachable term graph.
+    /\ slot \in Slots
+    /\ \A b \in blocks : blockSlot[b] =< slot
     /\ proposer \in [Ids -> Validators]
     /\ viableLeaf \in SUBSET Ids
     /\ viableLeaf \subseteq blocks

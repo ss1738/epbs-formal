@@ -298,10 +298,52 @@ state verifies. It is blocked on an encoding choice we made for TLC's benefit
 (computed head, cheap to enumerate) that is expensive to solve symbolically. We
 would rather record that precisely than claim symbolic results we do not have.
 
-## 8. Next
+## 8. The refactor, and a genuine symbolic result
 
-1. **Carry `head` as state** so the SMT formula per step is tractable, then
-   re-run the bounded check. This is the blocking task for §7.
+`ChainHead` was rewritten from a four-level nested descent to a single `CHOOSE`
+over a flat GHOST-consistency predicate — same fixpoint, stated as one bounded
+quantification rather than four nested choices:
+
+```tla
+IsGhostHead(h) ==
+    /\ h \in blocks
+    /\ Children(h) = {}
+    /\ \A a \in ({Genesis} \union blockAnc[h]) :
+         \A c \in Children(a) :
+            OnPathTo(c, h) => \A d \in Children(a) : Weight(c) >= Weight(d) ...
+```
+
+Measured effect on `apalache-mc check`, same config, same invariant:
+
+| Bound | nested descent | flat predicate |
+|---|---|---|
+| `--length=1` | no result in 7+ min | **OK in ~20 s** |
+| `--length=2` | — | timeout at 540 s |
+| `--length=3` | — | reaches Step 2, timeout at 400 s |
+
+**The result: `Checker reports no error up to computation length 1`,
+`EXITCODE: OK`.** `FC_ReorgImpliesAdversaryHeavy` is symbolically verified for
+all initial states and one transition, at 4 validators with 1 Byzantine.
+
+That is a real verification claim — the first in this repository that is not
+sampling — and it is a small one. Depth 1 is one step. The multi-slot behaviour
+this whole exercise is about lives near depth 120.
+
+**What the refactor bought:** roughly a 20x reduction in per-state SMT cost, and
+the demonstration that symbolic checking of this model is possible at all. What it
+did not buy is depth. The cost still grows steeply per step, so the flat predicate
+moved the wall rather than removing it.
+
+Honest read: enumerative checking stalls at depth 10 over 84M states; symbolic
+checking verifies depth 1 in twenty seconds and stalls by depth 2-3. Neither
+currently reaches the region of interest. The next lever is not another encoding
+tweak but reducing what must be solved per step — smaller validator sets with
+symmetry, or splitting the invariant so each check carries less of the model.
+
+## 9. Next
+
+1. Symmetry reduction on `Validators`, and splitting
+   `FC_ReorgImpliesAdversaryHeavy` into cheaper conjuncts, to buy depth.
 2. Per-validator views and network delay, without which balancing attacks cannot be
    expressed.
 3. Effective balances rather than unit weight.

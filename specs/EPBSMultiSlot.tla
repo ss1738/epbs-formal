@@ -138,22 +138,41 @@ Weight(b) == BaseWeight(b) + PayloadWeight(b) + BoostWeight(b)
 Children(b) == { c \in blocks : blockParent[c] = b /\ c # Genesis }
 
 \* consensus-specs breaks fork-choice ties on the block ROOT, i.e. a hash, which
-\* bears no relation to creation order. Ties were previously broken by lowest
-\* block id, which systematically favours earlier blocks and produced a
-\* spurious "reorg" whenever two zero-weight siblings existed. This scramble
-\* stands in for root ordering: deterministic, but not monotone in id.
+\* bears no relation to creation order. This scramble stands in for root
+\* ordering: deterministic, but not monotone in id.
 BlockHash(b) == (b * 7 + 3) % 13
 
-Heaviest(S) ==
-    CHOOSE c \in S :
-        \A d \in S : Weight(c) > Weight(d)
-                     \/ (Weight(c) = Weight(d) /\ BlockHash(c) >= BlockHash(d))
 
-Descend(b) == IF Children(b) = {} THEN b ELSE Heaviest(Children(b))
+\* GHOST-consistency as a FLAT PREDICATE rather than a nested descent.
+\*
+\* ChainHead was Descend(Descend(Descend(Descend(Genesis)))), where each Descend
+\* expanded a CHOOSE over a comprehension whose guard called Weight (itself a
+\* Cardinality over a comprehension across all validators). Four nested levels of
+\* that, referenced from Canonical, Reorged, IsHeadWeak and the invariant, is an
+\* SMT formula Z3 does not return on: measured at >7 minutes for ONE successor
+\* state at --length=1, against ~10s for the same model with ChainHead stubbed.
+\*
+\* h is the GHOST head iff it is a leaf and, at every branch point on the path
+\* from genesis to h, the child continuing that path is at least as heavy as its
+\* siblings. That is the same fixpoint the descent computes, stated as one
+\* bounded quantification instead of four nested choices.
+OnPathTo(c, h) == c = h \/ c \in blockAnc[h]
 
-\* GHOST descent, unrolled to the maximum tree depth. MaxSlot =< 4 is asserted
-\* above so this unrolling is complete; a deeper horizon needs more steps.
-ChainHead == Descend(Descend(Descend(Descend(Genesis))))
+IsGhostHead(h) ==
+    /\ h \in blocks
+    /\ Children(h) = {}
+    /\ \A a \in ({Genesis} \union blockAnc[h]) :
+         \A c \in Children(a) :
+            OnPathTo(c, h) =>
+               \A d \in Children(a) :
+                  Weight(c) > Weight(d)
+                  \/ (Weight(c) = Weight(d) /\ BlockHash(c) >= BlockHash(d))
+
+\* A leaf always exists (genesis when the tree is empty), so this is total.
+ChainHead ==
+    IF \E h \in blocks : IsGhostHead(h)
+    THEN CHOOSE h \in blocks : IsGhostHead(h)
+    ELSE Genesis
 
 Canonical(b) == b = ChainHead \/ b \in blockAnc[ChainHead]
 

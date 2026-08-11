@@ -62,6 +62,11 @@ Init ==
     /\ nodeAnc \in [Ids -> SUBSET AncUniverse]
     /\ AncClosure
     /\ \A b \in Ids \ blocks : nodeAnc[b] = {}
+    \* The head is admitted freely and constrained by its certificate -- the M3
+    \* substitution. No CHOOSE anywhere in the reachable term graph.
+    /\ head \in AllNodes
+    /\ headPath \in SUBSET AllNodes
+    /\ HeadCertified
 
 Next == UNCHANGED vars
 

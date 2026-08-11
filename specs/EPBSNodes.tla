@@ -72,11 +72,15 @@ VARIABLES
     \* get_ancestor's first step leaves the current root regardless of payload
     \* status -- so all three nodes of one root share an ancestor set.
     \* Written once at block insertion; see AncClosure.
-    nodeAnc
+    nodeAnc,
+    \* @type: $node;      get_head's result, carried rather than computed
+    head,
+    \* @type: Set($node); justified root .. head inclusive. See HeadCertified.
+    headPath
 
 vars == << blocks, blockSlot, blockParent, parentStatus, payloadVerified,
            ptcTimely, daAvailable, latestMsg, equivocators, boostRoot,
-           boostApplies, nodeAnc >>
+           boostApplies, nodeAnc, head, headPath >>
 
 ASSUME ValidatorsNonEmpty == Validators # {}
 ASSUME ByzSubset          == ByzValidators \subseteq Validators
@@ -238,25 +242,63 @@ AllNodes ==
     \union { [root |-> b, ps |-> EMPTY] : b \in blocks }
     \union { [root |-> b, ps |-> FULL] : b \in (blocks \intersect payloadVerified) }
 
-\* get_head: descend from the justified root taking the max child each step.
-\* Computed here; §2.2 of the blueprint carries it as state once actions exist.
-\* @type: ($node) => Bool;
-IsHead(h) ==
-    /\ h \in AllNodes
-    /\ NodeChildren(h) = {}
-    /\ \A n \in AllNodes :
-         (n # h /\ NodeInSubtree(h, n)) =>
-            \A sib \in NodeChildren(n) :
-               NodeInSubtree(h, sib) \/ Precedes(sib, h)
+(***************************************************************************)
+(* The head -- STATE with a local certificate, not a global query.          *)
+(*                                                                          *)
+(* The previous formulation was                                             *)
+(*                                                                          *)
+(*   ChainHead == IF \E h \in AllNodes : IsHead(h)                           *)
+(*                THEN CHOOSE h \in AllNodes : IsHead(h) ELSE ...            *)
+(*                                                                          *)
+(* with IsHead quantifying twice over AllNodes and calling Precedes -> Weight*)
+(* -> AttScore underneath. MEASURED: that exhausted a 12GB heap during       *)
+(* constraint construction, both before the nodeAnc rewrite (~6s) and after  *)
+(* it (877s), while every invariant avoiding it returned in 2-3s. CHOOSE was *)
+(* isolated as the sole cause.                                              *)
+(*                                                                          *)
+(* CHOOSE is a definite description, not a search: Apalache must encode a    *)
+(* Skolem constant plus the constraint that it satisfies IsHead, and that it *)
+(* is the SAME witness at every occurrence -- so the whole IsHead term is    *)
+(* reconstructed per occurrence. Carrying the head instead turns that into a *)
+(* per-transition obligation quantified over headPath and NodeChildren.     *)
+(***************************************************************************)
 
-\* @type: () => $node;
-ChainHead ==
-    IF \E h \in AllNodes : IsHead(h)
-    THEN CHOOSE h \in AllNodes : IsHead(h)
-    ELSE [root |-> Genesis, ps |-> PENDING]
+GenesisNode == [root |-> Genesis, ps |-> PENDING]
+
+\* The unique parent of a node in the alternating tree. A payload node's parent
+\* is its own block's PENDING node; a PENDING node's parent is the parent block
+\* at its DECLARED status. Local, no walk.
+\* @type: ($node) => $node;
+NodeParent(n) ==
+    IF n.ps = PENDING
+    THEN [root |-> blockParent[n.root], ps |-> parentStatus[n.root]]
+    ELSE [root |-> n.root, ps |-> PENDING]
+
+\* get_head, as a certificate on (head, headPath) rather than a computation.
+\* Every quantifier ranges over headPath or NodeChildren -- never over AllNodes,
+\* and never nested over it twice.
+\* @type: () => Bool;
+HeadCertified ==
+    /\ headPath \subseteq AllNodes
+    /\ GenesisNode \in headPath
+    /\ head \in headPath
+    \* head is a leaf: get_head stops where there are no children
+    /\ NodeChildren(head) = {}
+    \* connected: every node but the root has its parent on the path
+    /\ \A n \in headPath : n = GenesisNode \/ NodeParent(n) \in headPath
+    \* a path, not a tree: at most one child of any node lies on it
+    /\ \A n \in headPath :
+         \A c1, c2 \in NodeChildren(n) :
+            (c1 \in headPath /\ c2 \in headPath) => c1 = c2
+    \* and each step took the MAXIMUM child, which is what makes it get_head
+    \* rather than merely some path
+    /\ \A n \in headPath :
+         n = head \/ \E c \in NodeChildren(n) :
+                       /\ c \in headPath
+                       /\ \A sib \in NodeChildren(n) : sib = c \/ Precedes(sib, c)
 
 \* @type: ($node) => Bool;
-Canonical(n) == n = ChainHead \/ NodeInSubtree(ChainHead, n)
+Canonical(n) == n \in headPath
 
 -----------------------------------------------------------------------------
 (***************************************************************************)
@@ -271,6 +313,8 @@ TypeOK ==
     /\ equivocators \subseteq Validators
     /\ boostRoot \in blocks \union {0}
     /\ \A b \in Ids : \A a \in nodeAnc[b] : a.root \in Ids /\ a.ps \in {EMPTY, FULL}
+    /\ head \in AllNodes
+    /\ headPath \subseteq AllNodes
 
 \* S4. The two payload nodes of one root are never both canonical. Structural,
 \* cheap, and independent of any weight -- the first thing to check because it
@@ -338,6 +382,18 @@ VAC_TiebreakerZero     == \A n \in AllNodes : Tiebreaker(n) # 0
 \* passed while fork choice had effectively no proposer boost. This probe is the
 \* only thing standing between that bug and a green run, so it must never be
 \* dropped from the suite.
+\* HEAD-CERTIFICATE REACHABILITY PROBES.
+\*
+\* HeadCertified is asserted inside Init, so if it is unsatisfiable for some
+\* trees those trees silently vanish from the domain and every invariant holds
+\* vacuously over what remains. That is the exact failure this repository exists
+\* to avoid, so the certificate must be probed as hard as the properties.
+\* All three are deliberately false and MUST report VIOLATED.
+VAC_HeadDeep      == blockSlot[head.root] = 0        \* head can leave genesis
+VAC_HeadFull      == head.ps # FULL                  \* a FULL node can be head
+VAC_MultiBlock    == blocks = {Genesis}              \* trees can be non-trivial
+
+\* @type: () => Bool;
 VAC_BoostReachesDescendant ==
     \A n \in AllNodes :
         ~( boostRoot # 0 /\ n.root # boostRoot /\ BoostInSubtree(n) )

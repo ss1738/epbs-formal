@@ -1,5 +1,34 @@
 # ePBS formal model — response to the ESP review
 
+> ## ⚠ RETRACTED IN PART — DO NOT CITE THE METRICS
+>
+> This document is under structural revision. Two of its central claims are known
+> false as of commit `83825ab`:
+>
+> **§2 — the payload-boost coupling.** This document describes the PTC verdict as
+> "feeding directly into fork-choice weight". Gloas `get_weight` returns
+> `attestation_score + proposer_score` and contains **no payload term**. Payload
+> status is a fork-choice *node attribute* (`PAYLOAD_STATUS_FULL` / `EMPTY`), gated
+> by `is_payload_verified` and resolved by `get_payload_status_tiebreaker` — node
+> availability and a tiebreak, not additive weight. See `D5_PAYLOAD_WEIGHT.md`.
+> The coupling between the PTC and fork choice is real; the mechanism described
+> here is not. This error predates the ESP submission.
+>
+> **§2 — the honest/adversary asymmetry.** `HonestMayReorg` was unsatisfiable at
+> every configuration ever run, so `ProposeHonestReorg` was dead code. Fixed in
+> `f88df8e`; the mechanism now fires in 725 states.
+>
+> **§3 — all state counts.** Measured under a fork choice carrying phantom payload
+> weight, and after `f88df8e` under a different weighting again. The stickiness
+> result in particular (reorgs reachable in 2,692 states, then unreachable in
+> 19,889,946) is probably an artifact of propagating weight the protocol does not
+> grant.
+>
+> What survives: §1 (the structural finding that no specification composed with any
+> other), §4 (the false-positive log), and §5 (the measured limits of enumerative
+> checking). The rest awaits re-measurement after `PayloadWeight` is removed or the
+> model is rebuilt on `(root, payload_status)` nodes.
+
 Boris Stanic, EF Ecosystem Support Program:
 
 > The main issue is scale. The models are checked at a few hundred to a few thousand

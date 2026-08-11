@@ -153,9 +153,9 @@ Descend(b) == IF Children(b) = {} THEN b ELSE Heaviest(Children(b))
 
 \* GHOST descent, unrolled to the maximum tree depth. MaxSlot =< 4 is asserted
 \* above so this unrolling is complete; a deeper horizon needs more steps.
-Head == Descend(Descend(Descend(Descend(Genesis))))
+ChainHead == Descend(Descend(Descend(Descend(Genesis))))
 
-Canonical(b) == b = Head \/ b \in blockAnc[Head]
+Canonical(b) == b = ChainHead \/ b \in blockAnc[ChainHead]
 
 \* consensus-specs gloas/fork-choice.md, is_head_weak: head weight counts the
 \* effective balance of every validator in store.equivocating_indices, on top
@@ -163,7 +163,7 @@ Canonical(b) == b = Head \/ b \in blockAnc[Head]
 \* it attacked, not only to the branch its latest message names. Unit weight
 \* here stands in for effective balance.
 EquivWeight(b) ==
-    IF b = Head THEN Cardinality(equivocators \ { v \in equivocators : Supports(v, b) })
+    IF b = ChainHead THEN Cardinality(equivocators \ { v \in equivocators : Supports(v, b) })
     ELSE 0
 
 
@@ -233,8 +233,8 @@ Init ==
 ProposeHonest ==
     /\ slot =< MaxSlot
     /\ nextId =< MaxBlockId
-    /\ ~HonestMayReorg(Head)
-    /\ LET p == Head IN
+    /\ ~HonestMayReorg(ChainHead)
+    /\ LET p == ChainHead IN
        /\ blocks'      = blocks \union {nextId}
        /\ blockSlot'   = [blockSlot   EXCEPT ![nextId] = slot]
        /\ blockParent' = [blockParent EXCEPT ![nextId] = p]
@@ -251,8 +251,8 @@ ProposeHonest ==
 ProposeHonestReorg ==
     /\ slot =< MaxSlot
     /\ nextId =< MaxBlockId
-    /\ HonestMayReorg(Head)
-    /\ LET p == blockParent[Head] IN
+    /\ HonestMayReorg(ChainHead)
+    /\ LET p == blockParent[ChainHead] IN
        /\ blocks'      = blocks \union {nextId}
        /\ blockSlot'   = [blockSlot   EXCEPT ![nextId] = slot]
        /\ blockParent' = [blockParent EXCEPT ![nextId] = p]
@@ -288,8 +288,8 @@ HonestPTCVote(v, b) ==
 \* An honest validator attests to the block it sees as canonical.
 HonestAttest(v) ==
     /\ v \in HonestValidators
-    /\ votes[v] # Head
-    /\ votes' = [votes EXCEPT ![v] = Head]
+    /\ votes[v] # ChainHead
+    /\ votes' = [votes EXCEPT ![v] = ChainHead]
     /\ UNCHANGED << privateBlocks, privateVotes,
                     slot, blocks, blockSlot, blockParent, blockAnc, revealed,
                     ptcVotes, ptcVerdict, equivocators, designated, everHead, advUsed, nextId >>
@@ -316,13 +316,13 @@ ClosePTC(b) ==
 \* by proposer boost, the boost expired at the slot boundary, and the head moved
 \* to a zero-weight sibling. That is a liveness artifact of the encoding, not a
 \* reorg, and it contaminated every safety result.
-AllHonestAttested == \A v \in HonestValidators : votes[v] = Head
+AllHonestAttested == \A v \in HonestValidators : votes[v] = ChainHead
 
 AdvanceSlot ==
     /\ slot < MaxSlot
     /\ AllHonestAttested
     /\ slot' = slot + 1
-    /\ everHead' = everHead \union {Head}
+    /\ everHead' = everHead \union {ChainHead}
     /\ UNCHANGED << privateBlocks, privateVotes,
                     blocks, blockSlot, blockParent, blockAnc, revealed,
                     ptcVotes, ptcVerdict, votes, equivocators, designated, advUsed, nextId >>
@@ -341,7 +341,7 @@ AdvProposeFork(p) ==
     /\ slot =< MaxSlot
     /\ nextId =< MaxBlockId
     /\ p \in blocks
-    /\ p # Head
+    /\ p # ChainHead
     /\ blocks'      = blocks \union {nextId}
     /\ blockSlot'   = [blockSlot   EXCEPT ![nextId] = slot]
     /\ blockParent' = [blockParent EXCEPT ![nextId] = p]
@@ -490,14 +490,14 @@ HonSupport(b) == Cardinality({ v \in HonestValidators : Supports(v, b) })
 (***************************************************************************)
 FC_ReorgImpliesAdversaryHeavy ==
     \A b \in blocks :
-        Reorged(b) => ByzSupport(Head) + ProposerBoost >= HonSupport(b)
+        Reorged(b) => ByzSupport(ChainHead) + ProposerBoost >= HonSupport(b)
 
 \* A payload the committee ruled present should not be reorged out by an
 \* adversary lacking the weight for it.
 FC_TimelyPayloadSafe ==
     \A b \in blocks :
         (Reorged(b) /\ ptcVerdict[b] = "present")
-            => ByzSupport(Head) + ProposerBoost >= HonSupport(b) + PayloadBoost
+            => ByzSupport(ChainHead) + ProposerBoost >= HonSupport(b) + PayloadBoost
 
 (***************************************************************************)
 (* VACUITY PROBES                                                           *)

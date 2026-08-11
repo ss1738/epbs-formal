@@ -218,9 +218,70 @@ become provable where here they are merely unsampled.
 
 ---
 
-## 7. Next
+## 7. Apalache port — attempted, and where it stops
 
-1. **Port to Apalache.** §5 is the justification, with numbers.
+A timeboxed port was executed rather than projected. Apalache 0.61.0, Java 26,
+16 GB machine.
+
+**Two obstacles cleared.**
+
+*Name collision.* `Head` resolves to `Sequences!Head`, which TLC tolerated and
+Apalache does not:
+
+```
+requirement failed: unexpected arity 0 in Sequences!Head applied to
+```
+
+Renamed to `ChainHead` throughout. After that, `apalache-mc typecheck` returns
+`EXITCODE: OK` — the existing `\* @type:` annotations on all fourteen state
+variables were sufficient, with no further annotation work required.
+
+**One obstacle not cleared: per-state SMT cost.**
+
+```
+apalache-mc check --config=exh.cfg --length=4 --inv=FC_ReorgImpliesAdversaryHeavy
+  State 0: state invariant 0 holds.          (11 s)
+  Step 0: picking a transition out of 1
+  State 1: Checking 1 state invariants
+  Ran out of heap memory (max JVM memory: 4294967296)      after 3 min 14 s
+```
+
+Raised to `-Xmx12g`. It then survives, but does not finish: at `--length=4` and
+again at **`--length=1`**, checking the invariant at the single successor state
+exceeds seven minutes without returning.
+
+The bound is therefore not the constraint — a one-step run behaves the same as a
+four-step run. The cost is per state, in the invariant itself.
+
+**Diagnosis.** `ChainHead` is a four-level nested GHOST descent:
+
+```tla
+Heaviest(S)  == CHOOSE c \in S : \A d \in S : Weight(c) > Weight(d) \/ ...
+Descend(b)   == IF Children(b) = {} THEN b ELSE Heaviest(Children(b))
+ChainHead    == Descend(Descend(Descend(Descend(Genesis))))
+```
+
+Each `Descend` expands a `CHOOSE` over a set comprehension whose guard calls
+`Weight`, which itself is a `Cardinality` over a comprehension across all
+validators. Four nested levels of that, and `ChainHead` appears in `Canonical`,
+`Reorged`, `IsHeadWeak` and the invariant. The SMT formula for one state is large
+enough that Z3 does not return.
+
+This is a modelling problem, not an Apalache limitation. The fix is to stop
+recomputing the head and carry it as state — maintain `head` as a variable updated
+incrementally when blocks or votes change, and assert GHOST-consistency as a
+separate invariant rather than inlining the descent everywhere. That converts a
+deeply nested `CHOOSE` into a lookup, and is the next concrete task.
+
+**Net.** Symbolic checking is reachable — the spec type-checks and the initial
+state verifies. It is blocked on an encoding choice we made for TLC's benefit
+(computed head, cheap to enumerate) that is expensive to solve symbolically. We
+would rather record that precisely than claim symbolic results we do not have.
+
+## 8. Next
+
+1. **Carry `head` as state** so the SMT formula per step is tractable, then
+   re-run the bounded check. This is the blocking task for §7.
 2. Per-validator views and network delay, without which balancing attacks cannot be
    expressed.
 3. Effective balances rather than unit weight.

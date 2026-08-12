@@ -856,7 +856,7 @@ Stated explicitly so no reader mistakes a plan for a result.
 4. **`ptcTimely ⊆ payloadVerified` (§4.3b) is INFERRED**, not read from spec text.
 5. **`ShouldExtendPayload` under-approximates** — it omits two disjuncts requiring
    `blockParent` of `boostRoot`. Conservative for the FULL branch; not faithful.
-6. **`coq/EPBSForkChoice.v` still proves a theorem about `PayloadBoost`**, a
+6. **`coq/EPBSForkChoice.v` DELETED (2026-08-12).** It proved a theorem about `PayloadBoost`, a
    quantity Gloas does not have (D5). It is unaffected by anything in this
    document and remains the strongest *wrong* result in the repository.
 

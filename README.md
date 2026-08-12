@@ -150,7 +150,6 @@ specs/EPBSWeightPayment.tla       Gloas weight-quorum payment settlement
 specs/EPBSWeightPayment.cfg       its TLC configuration
 specs/EPBS_fault_*.cfg            non-vacuity self-tests (injected bugs TLC must catch)
 coq/EPBSPayment.v                 milestone 3: Coq proof of the payment core (all sizes)
-coq/EPBSForkChoice.v              milestone 3: Coq proof of the reorg threshold (all weights)
 coq/EPBSEquivocation.v            Coq proof that equivocation is self-punishing (no slashing needed)
 coq/EPBSCommittee.v               Coq proof of PTC tally correctness for all committee sizes
 coq/EPBSChain.v                   Coq proof of chain conservation for all chain lengths

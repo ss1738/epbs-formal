@@ -17,7 +17,13 @@ Proves the EIP-7732 payment core for **all** bid values, **all** balances, and *
 | `equivocation_not_canonical` | An equivocated reveal never yields a canonical payload. |
 | `withhold_not_canonical` | A withheld reveal never yields a canonical payload. |
 
-## `EPBSForkChoice.v`: the reorg threshold, for all weights
+## ~~`EPBSForkChoice.v`~~ — DELETED 2026-08-12
+
+**This file no longer exists.** It proved a reorg threshold over `PayloadBoost`,
+an additive payload term Gloas does not have. See `../D5_PAYLOAD_WEIGHT.md`.
+The section below is retained as the record of what was claimed.
+
+### (retracted) the reorg threshold, for all weights
 
 Lifts the fork-choice reorg threshold (which `../specs/EPBSForkChoice.tla` measures on two finite parameter sets) to a theorem true for **all** non-negative weights.
 
@@ -86,7 +92,6 @@ The TLA+ models (`../specs/`) check these properties, plus the fork-choice and l
 ```bash
 # Requires Coq / the Rocq Prover (tested with Rocq 9.2). Each file is standalone.
 coqc EPBSPayment.v
-coqc EPBSForkChoice.v
 coqc EPBSEquivocation.v
 coqc EPBSCommittee.v
 coqc EPBSChain.v

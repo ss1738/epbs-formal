@@ -20,7 +20,7 @@ Spec reference: `ethereum/consensus-specs`, the **Gloas** fork (`specs/gloas/`),
 | Proof | Gloas spec element it validates | What it establishes (for all sizes) |
 |---|---|---|
 | `coq/EPBSPayment.v` | `process_builder_pending_payments` outcome; `can_builder_cover_bid` | G1, G3, conservation, commitment binding, for all bid values and any number of builders |
-| `coq/EPBSForkChoice.v` | `is_head_weak` / `is_parent_strong` weight inequality | The reorg threshold, exact and in both directions, for all non-negative weights |
+| ~~`coq/EPBSForkChoice.v`~~ | DELETED | Proved a threshold over `PayloadBoost`, absent from Gloas. See `D5_PAYLOAD_WEIGHT.md`. Reorg resistance is unproven. |
 | `coq/EPBSEquivocation.v` | Gloas defines no equivocation slashing (proposer slashing only clears a `BuilderPendingPayment`) | Equivocation is self-punishing (net loss to the builder), the rationale for omitting slashing |
 | `coq/EPBSCommittee.v` | `payload_timeliness` tally against `PAYLOAD_TIMELY_THRESHOLD` | The PTC tally equals the truth for all committee sizes |
 | `coq/EPBSChain.v` | `builder_pending_withdrawals` settlement | Conservation and withdrawal drainage for all chain lengths |

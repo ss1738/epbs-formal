@@ -61,6 +61,31 @@
 > The CI badge reflects the *old* specs, which still check green. That is the
 > problem, not evidence against it.
 
+## The finding, in one diagram
+
+For a block one slot old, `get_weight` returns **zero on both** its payload
+nodes, so `get_head`'s `(weight, root, tiebreaker)` key collapses and the
+tiebreaker decides alone. Proposer boost is never evaluated.
+
+```mermaid
+graph TD
+    A["get_head descends to a child node<br/>n = root r with payload_status ps"] --> B{"is_previous_slot_payload_decision of n<br/>slot of r, plus 1, equals current slot<br/>AND ps is EMPTY or FULL"}
+    B -- No --> C["get_weight returns<br/>attestation_score + proposer_score<br/>tiebreaker returns ps"]
+    B -- Yes --> D["get_weight returns zero<br/>FIRST LINE, before the boost branch"]
+    D --> E["Both r-EMPTY and r-FULL qualify<br/>same root, so same slot"]
+    E --> F["Sort key weight, root, tiebreaker<br/>weight ties at 0 and root ties"]
+    F --> G["get_payload_status_tiebreaker decides ALONE"]
+    G --> H{"should_extend_payload of r"}
+    H -- True --> I["FULL scores 2, beats EMPTY 1"]
+    H -- False --> J["FULL scores 0, loses to EMPTY 1"]
+    D -.-> K["proposer boost never reached<br/>INERT in this window"]
+```
+
+Full derivation, spec quotes and the machine-checked witness:
+[`PTC_TIEBREAK_NOTE.md`](PTC_TIEBREAK_NOTE.md).
+
+---
+
 A machine-checkable formal model of **Enshrined Proposer-Builder Separation (ePBS)** as specified in **[EIP-7732](https://eips.ethereum.org/EIPS/eip-7732)**, the proposer/builder split that Ethereum's Glamsterdam upgrade brings into the consensus protocol itself.
 
 ePBS replaces out-of-protocol relays (MEV-Boost) with in-protocol rules governing how a proposer commits to a builder's block and how the builder is obligated to reveal it. Getting those rules wrong is a consensus-level risk that cannot be rolled back once shipped. This project models the EIP-7732 mechanism (the `SignedExecutionPayloadBid`, the `BuilderPendingPayment` deducted at inclusion, the PTC `payload_present` vote, and the canonical-versus-reorged settlement) and checks its three stated safety guarantees plus liveness, so problems are found before enshrinement rather than after.

@@ -19,7 +19,16 @@ CONSTANTS
     \* @type: Int;
     MaxEquivocations
 
-VARIABLE
+VARIABLES
+    \* @type: $node;
+    \* Head as of the PREVIOUS state. One step of carried history turns the
+    \* two-state reorg property into a cheap state invariant, avoiding
+    \* --temporal's liveness-to-safety reduction.
+    prevHead,
+    \* @type: Bool;
+    \* Whether, IN THE PREVIOUS STATE, the head's block out-attested every
+    \* sibling block by more than the adversary could summon.
+    prevHeadStrong,
     \* @type: Int -> Str;
     \* Designated proposer per slot, fixed at Init. Without this, an adversary's
     \* off-schedule block can take proposer boost -- v1's first false positive,
@@ -30,7 +39,7 @@ VARIABLE
 varsV2 == << blocks, blockSlot, blockParent, parentStatus, payloadVerified,
              ptcTimely, daAvailable, latestMsg, equivocators, boostRoot,
              boostApplies, nodeAnc, head, headPath, proposer, viableLeaf,
-             filtered, slot, schedule >>
+             filtered, slot, schedule, prevHead, prevHeadStrong >>
 
 -----------------------------------------------------------------------------
 (***************************************************************************)
@@ -53,6 +62,49 @@ Derived ==
     /\ FilteredClosure                            \* filtered = get_filtered_block_tree
     /\ HeadCertified                              \* head/headPath = get_head
     /\ boostApplies = ShouldApplyProposerBoost    \* the four-conjunct gate
+
+AdversaryCapacity == Cardinality(ByzValidators) + ProposerBoost
+
+\* Block-level attestation margin. Uses AttScore on the PENDING node, NOT
+\* Weight, for two reasons. First, Weight is zeroed by
+\* is_previous_slot_payload_decision exactly in the window where the payload
+\* decision happens -- today's P3 witness showed both branches at zero -- so any
+\* margin test built on Weight is false there at ANY validator count. Second,
+\* the spec's own is_head_weak and is_parent_strong both measure
+\* get_attestation_score on a PENDING node, so this matches how Gloas asks the
+\* same question.
+\* @type: (Int) => Int;
+BlockMargin(r) == AttScore([root |-> r, ps |-> PENDING])
+
+\* Is the current head's BLOCK dominant enough that the adversary cannot flip it?
+\* @type: () => Bool;
+\* FINDING #15. An earlier version was the sibling clause ALONE. That is
+\* vacuously true when the block has no siblings yet, so a block that was merely
+\* FIRST got classified unassailable -- with zero attestations. A later sibling
+\* then took the head on proposer boost and P1b reported a reorg. Being
+\* unopposed is not being dominant.
+\*
+\* The absolute clause is what makes the predicate mean anything: the block must
+\* hold more attestation weight than the adversary can summon, so no adversarial
+\* action can flip it. This is why 5 validators were needed -- at 3, honest
+\* weight cannot exceed AdversaryCapacity = 3 and the predicate is unsatisfiable
+\* (that was the P1 degeneracy). At 5 validators with one Byzantine, 4 honest
+\* attestations clear a capacity of 3.
+\*
+\* The `r = Genesis` disjunct is still trivially true at Init, which is why
+\* VAC_P1b_PrevHeadStrong must require prevHead.root # Genesis.
+HeadBlockStrong ==
+    LET r == head.root IN
+    \/ r = Genesis
+    \/ /\ BlockMargin(r) > AdversaryCapacity
+       /\ \A sibr \in BlockChildren(blockParent[r]) :
+            sibr = r \/ BlockMargin(r) > BlockMargin(sibr) + AdversaryCapacity
+
+\* Appended to every action. HeadBlockStrong is evaluated UNPRIMED, so it records
+\* the pre-state's verdict -- which is what the reorg property must condition on.
+RecordHistory ==
+    /\ prevHead' = head
+    /\ prevHeadStrong' = HeadBlockStrong
 
 -----------------------------------------------------------------------------
 (***************************************************************************)
@@ -81,6 +133,10 @@ Init ==
     /\ head \in AllNodes
     /\ headPath \in SUBSET AllNodes
     /\ boostApplies \in BOOLEAN
+    /\ prevHead = head
+    \* NOT free. Left as `\in BOOLEAN` the solver picks TRUE and every probe on
+    \* it violates at State 0 without a transition establishing anything.
+    /\ prevHeadStrong = HeadBlockStrong
     /\ Derived
 
 -----------------------------------------------------------------------------
@@ -108,11 +164,14 @@ ProposeBlock(b, par, ps) ==
     /\ boostRoot'    = b
     /\ UNCHANGED << payloadVerified, ptcTimely, daAvailable, latestMsg,
                     equivocators, slot, schedule >>
-    /\ viableLeaf' \in SUBSET blocks'
+    \* Viability is decided ONCE, here, and frozen -- see the note on
+    \* viableLeaf. Every other action carries it unchanged.
+    /\ viableLeaf' \in { viableLeaf, viableLeaf \union {b} }
     /\ filtered'   \in SUBSET Ids
     /\ head' \in AllNodes'
     /\ headPath' \in SUBSET AllNodes'
     /\ boostApplies' \in BOOLEAN
+    /\ RecordHistory
     /\ Derived'
 
 \* on_execution_payload_envelope: the payload is delivered and verified, so the
@@ -123,11 +182,12 @@ RevealPayload(b) ==
     /\ UNCHANGED << blocks, blockSlot, blockParent, parentStatus, nodeAnc,
                     ptcTimely, daAvailable, latestMsg, equivocators, boostRoot,
                     slot, proposer, schedule >>
-    /\ viableLeaf' \in SUBSET blocks
+    /\ viableLeaf' = viableLeaf
     /\ filtered'   \in SUBSET Ids
     /\ head' \in AllNodes'
     /\ headPath' \in SUBSET AllNodes'
     /\ boostApplies' \in BOOLEAN
+    /\ RecordHistory
     /\ Derived'
 
 \* on_payload_attestation_message, PTC_TIMELINESS_INDEX. Only meaningful for a
@@ -138,11 +198,12 @@ PtcVote(b) ==
     /\ UNCHANGED << blocks, blockSlot, blockParent, parentStatus, nodeAnc,
                     payloadVerified, daAvailable, latestMsg, equivocators,
                     boostRoot, slot, proposer, schedule >>
-    /\ viableLeaf' \in SUBSET blocks
+    /\ viableLeaf' = viableLeaf
     /\ filtered'   \in SUBSET Ids
     /\ head' \in AllNodes'
     /\ headPath' \in SUBSET AllNodes'
     /\ boostApplies' \in BOOLEAN
+    /\ RecordHistory
     /\ Derived'
 
 DaVote(b) ==
@@ -151,11 +212,12 @@ DaVote(b) ==
     /\ UNCHANGED << blocks, blockSlot, blockParent, parentStatus, nodeAnc,
                     payloadVerified, ptcTimely, latestMsg, equivocators,
                     boostRoot, slot, proposer, schedule >>
-    /\ viableLeaf' \in SUBSET blocks
+    /\ viableLeaf' = viableLeaf
     /\ filtered'   \in SUBSET Ids
     /\ head' \in AllNodes'
     /\ headPath' \in SUBSET AllNodes'
     /\ boostApplies' \in BOOLEAN
+    /\ RecordHistory
     /\ Derived'
 
 \* update_latest_messages. The strict slot increase is the LMD monotonicity rule
@@ -171,11 +233,12 @@ Attest(v, b, present) ==
     /\ UNCHANGED << blocks, blockSlot, blockParent, parentStatus, nodeAnc,
                     payloadVerified, ptcTimely, daAvailable, equivocators,
                     boostRoot, slot, proposer, schedule >>
-    /\ viableLeaf' \in SUBSET blocks
+    /\ viableLeaf' = viableLeaf
     /\ filtered'   \in SUBSET Ids
     /\ head' \in AllNodes'
     /\ headPath' \in SUBSET AllNodes'
     /\ boostApplies' \in BOOLEAN
+    /\ RecordHistory
     /\ Derived'
 
 \* Proposer boost expires at the slot boundary.
@@ -186,11 +249,12 @@ AdvanceSlot ==
     /\ UNCHANGED << blocks, blockSlot, blockParent, parentStatus, nodeAnc,
                     payloadVerified, ptcTimely, daAvailable, latestMsg,
                     equivocators, proposer, schedule >>
-    /\ viableLeaf' \in SUBSET blocks
+    /\ viableLeaf' = viableLeaf
     /\ filtered'   \in SUBSET Ids
     /\ head' \in AllNodes'
     /\ headPath' \in SUBSET AllNodes'
     /\ boostApplies' \in BOOLEAN
+    /\ RecordHistory
     /\ Derived'
 
 -----------------------------------------------------------------------------
@@ -210,11 +274,12 @@ AdvEquivocate(v) ==
     /\ UNCHANGED << blocks, blockSlot, blockParent, parentStatus, nodeAnc,
                     payloadVerified, ptcTimely, daAvailable, latestMsg,
                     boostRoot, slot, proposer, schedule >>
-    /\ viableLeaf' \in SUBSET blocks
+    /\ viableLeaf' = viableLeaf
     /\ filtered'   \in SUBSET Ids
     /\ head' \in AllNodes'
     /\ headPath' \in SUBSET AllNodes'
     /\ boostApplies' \in BOOLEAN
+    /\ RecordHistory
     /\ Derived'
 
 -----------------------------------------------------------------------------
@@ -229,6 +294,37 @@ Next ==
     \/ \E v \in Validators : AdvEquivocate(v)
 
 Spec == Init /\ [][Next]_varsV2
+
+\* RESTRICTED Next FOR P1b. Derived by the finding-#13 rule -- enumerate the
+\* property's free variables and keep an action that writes each -- rather than
+\* by intuition, which is how PtcVote/DaVote got dropped from a property that
+\* needed them.
+\*
+\*   prevHead, prevHeadStrong  <- RecordHistory  (every action)
+\*   head, headPath            <- Derived'       (every action)
+\*   nodeAnc, blocks, blockParent <- ProposeBlock
+\*   latestMsg                 <- Attest
+\*   equivocators              <- AdvEquivocate
+\*   slot                      <- AdvanceSlot
+\*
+\* AdvEquivocate is RETAINED and that is the point. AttScore excludes
+\* equivocators, so equivocating deletes a validator's vote from whichever block
+\* it supported -- the adversary's weight-SUBTRACTION capability. Dropping it
+\* would leave an adversary that can only push its own fork with proposer boost
+\* and never degrade an incumbent's margin, which is not reorg resistance in any
+\* meaningful sense. A HOLDS obtained that way would be worse than no result.
+\*
+\* RevealPayload is also retained despite payloadVerified being unreachable from
+\* P1b: dropping it forbids any block declaring FULL parent status, removing a
+\* whole class of tree shape from the search.
+\*
+\* Only PtcVote and DaVote are dropped. Neither writes any free variable of P1b.
+NextP1b ==
+    \/ \E b, par \in Ids : \E ps \in {EMPTY, FULL} : ProposeBlock(b, par, ps)
+    \/ \E b \in Ids : RevealPayload(b)
+    \/ \E v \in Validators : \E b \in Ids : \E pr \in BOOLEAN : Attest(v, b, pr)
+    \/ AdvanceSlot
+    \/ \E v \in Validators : AdvEquivocate(v)
 
 \* WITNESS-HUNTING SUB-MODEL. Six of the seven actions; only AdvEquivocate is
 \* dropped, since no P3 property mentions `equivocators`.
@@ -284,8 +380,6 @@ NextWitness ==
 \* Everything an adversary can add to one node's weight at these bounds: every
 \* Byzantine validator's attestation, plus the proposer boost if it controls the
 \* current proposal.
-AdversaryCapacity == Cardinality(ByzValidators) + ProposerBoost
-
 (*-------------------------------------------------------------------------*)
 (* P1. Reorg resistance under an adversary budget.                          *)
 (*                                                                          *)
@@ -322,6 +416,34 @@ VAC_P1_MarginTight ==
     \A n \in headPath :
         \A sib \in NodeChildren(NodeParent(n)) :
             sib = n \/ Weight(n) > Weight(sib) + AdversaryCapacity
+
+(*-------------------------------------------------------------------------*)
+(* P1b. THE GENUINE REORG PROPERTY (two-state, via carried history).        *)
+(*                                                                          *)
+(* If the head's block was dominant last state -- out-attesting every sibling *)
+(* by more than the adversary can summon -- then this state's head is still  *)
+(* on that block or a descendant of it. That is what reorg resistance means. *)
+(*                                                                          *)
+(* Deliberately BLOCK-level. A head moving between (r,EMPTY) and (r,FULL) is *)
+(* the payload decision resolving, not a reorg, and P3 showed that movement  *)
+(* is governed by the tiebreaker with both weights at zero.                  *)
+(*-------------------------------------------------------------------------*)
+P1b_NoBlockReorgUnderBudget ==
+    prevHeadStrong =>
+        \/ head.root = prevHead.root
+        \/ prevHead.root \in AncRoots(head.root)
+
+\* MANDATORY companion. P1b is an implication; if prevHeadStrong is never true it
+\* holds vacuously and says nothing. P2 already failed exactly this way.
+\*
+\* The NON-TRIVIAL form. `~prevHeadStrong` alone violates at State 0, because
+\* HeadBlockStrong's first disjunct is `r = Genesis` -- so it is TRUE at the
+\* initial state for free and the probe proves nothing. What has to be reachable
+\* is a strong head that is NOT genesis.
+VAC_P1b_PrevHeadStrong == ~(prevHeadStrong /\ prevHead.root # Genesis)
+
+\* And: can the head's block ever actually change? If not, P1b is trivial.
+VAC_P1b_HeadBlockMoves == head.root = prevHead.root
 
 (*-------------------------------------------------------------------------*)
 (* P2. Proposer-boost suppression is strictly bound to a duplicate proposal. *)

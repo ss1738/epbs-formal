@@ -91,13 +91,29 @@ VARIABLES
     \* @type: Int -> Str;  block proposer, for the equivocation gate
     proposer,
     \* @type: Set(Int);
-    \* ABSTRACTION. filter_block_tree calls a leaf viable when correct_justified
-    \* and correct_finalized both hold. Those need epochs, justification and
-    \* get_voting_source, none of which are modelled. This carries leaf viability
-    \* as an UNCONSTRAINED subset of block-level leaves instead, so the solver
-    \* ranges over every possible viability assignment and results hold for all
-    \* of them. The filtering STRUCTURE is exact; the viability PREDICATE is not
-    \* modelled at all, and this variable is where that gap is named.
+    \* ABSTRACTION, AND ITS ARITY CAVEAT.
+    \*
+    \* filter_block_tree calls a leaf viable when correct_justified and
+    \* correct_finalized both hold. Those need epochs, justification and
+    \* get_voting_source, none of which are modelled. Leaf viability is carried
+    \* here as a free choice instead, so the solver ranges over every viability
+    \* assignment. The filtering STRUCTURE is exact; the viability PREDICATE is
+    \* not modelled at all, and this variable is where that gap is named.
+    \*
+    \* CRITICAL: free choice is a STRENGTHENING for one-state properties and an
+    \* UNSOUND WEAKENING for two-state ones. Across a transition it lets
+    \* viability flip arbitrarily -- an adversary stronger than any real one.
+    \* It produced a false reorg in P1b: viableLeaf shrank {0,1} -> {0} between
+    \* states, emptying the filtered tree and collapsing the head to genesis with
+    \* no adversary involved.
+    \*
+    \* EPBSMultiSlotV2 therefore decides each block's viability ONCE at creation
+    \* and freezes it, following get_parent_payload_status: viability derives
+    \* from the block's own justified/finalized checkpoints, which are fixed when
+    \* the block is signed. Under-approximates real dynamics, where viability
+    \* does change as checkpoints advance -- stated, not hidden.
+    \*
+    \* An abstraction's soundness depends on the ARITY of the property using it.
     viableLeaf,
     \* @type: Set(Int);   get_filtered_block_tree's result. See FilteredClosure.
     filtered

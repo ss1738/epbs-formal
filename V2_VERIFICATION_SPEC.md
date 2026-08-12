@@ -388,6 +388,124 @@ meaningful needs
 validators at the current boost — a cost increase to be paid deliberately.
 **P1 must not be cited at this configuration.**
 
+### §1.10 Finding #14 — abstraction soundness depends on property arity
+
+`viableLeaf` was deliberately left unconstrained (§1.4), on the argument that
+quantifying over every viability assignment makes a result hold for all of them.
+
+**That argument is valid for one-state properties and invalid for two-state
+ones.** For a single state, free choice is a strengthening. Across a transition
+the solver re-picks viability each step — an adversary no protocol grants.
+
+It manufactured a false reorg the first time a two-state property was checked:
+
+```
+State1: viableLeaf = {0,1}   filtered = {0,1}
+State2: viableLeaf = {0,1}   filtered = {0,1}   head = (1,EMPTY)
+State3: viableLeaf = {0}     filtered = {}      head = (0,EMPTY)   <- "reorg"
+```
+
+`viableLeaf` shrank between states, emptying the filtered tree and collapsing the
+head to genesis. `equivocators = {}` throughout; nothing adversarial occurred.
+`P1b_NoBlockReorgUnderBudget` VIOLATED at lengths 3 and 5 purely from this.
+
+Every one-state result in this document is unaffected — free choice only ever
+strengthened those. P1b was the repository's first two-state property and it was
+exposed immediately.
+
+**Fix**, following the `get_parent_payload_status` precedent: viability derives
+from a block's own justified/finalized checkpoints, fixed when the block is
+signed, so it is chosen once at `ProposeBlock` and frozen. This
+under-approximates reality — viability does shift as checkpoints advance — and
+that is stated in the module rather than hidden.
+
+**The general rule, now the third methodology finding of the session:**
+
+> Before reusing an abstraction in a property of different arity, re-derive its
+> soundness. Free choice strengthens one-state claims and weakens two-state ones.
+
+Alongside #13 (a restricted `Next` must be able to write every free variable of
+the target property) and the probe rule (every probe needs its own check that it
+is not satisfied at `Init`).
+
+### §1.11 Reproducibility gap in commit `8d63479`
+
+Every P3 result in §1.9 was measured at **bound 2**, but the tree was restored to
+bound 4 before committing. A clean clone therefore runs a different model than
+the one measured. `set_bounds.sh` exists so a bound can be named rather than
+described — but a results table that does not name its bound is not reproducible,
+and §1.9's did not. Bounds are now stated per row.
+
+### §1.12 Finding #15 — unopposed is not dominant
+
+`HeadBlockStrong` was the sibling comparison alone:
+
+```tla
+\A sibr \in BlockChildren(blockParent[r]) :
+    sibr = r \/ BlockMargin(r) > BlockMargin(sibr) + AdversaryCapacity
+```
+
+With no siblings this is `\A x \in {} : P(x)` — **true**. A block that was merely
+*first* was classified unassailable with **zero attestations**. A later sibling
+then took the head on proposer boost and P1b reported a reorg:
+
+```
+State2: blocks={0,3}   head=(3,EMPTY)  prevHeadStrong=TRUE   latestMsg: nobody attested
+State3: blocks={0,3,4} head=(4,EMPTY)  blockSlot[3]=blockSlot[4]=1, both parent 0
+```
+
+The gate was compromised by the same flaw: `VAC_P1b_PrevHeadStrong` violating at
+State 3 was witnessing a *vacuously* strong block, so it passed for the wrong
+reason and never protected the property. **Passing a gate is not evidence the
+property is sound.**
+
+Fixed by requiring absolute support, `BlockMargin(r) > AdversaryCapacity`. This
+is what the 5-validator scale-up was for — at 3 validators honest weight cannot
+exceed capacity 3 and the predicate is unsatisfiable, which was the original P1
+degeneracy. The config was scaled but the threshold was left out of the
+predicate, so the scale-up bought nothing until this fix.
+
+**Fourth instance of one pattern today:**
+
+| | Vacuous universal |
+|---|---|
+| D1 | `Frac(20) = 0` → `weight < 0` never true |
+| P2 | antecedent never reached under actions |
+| #13 | `ptcTimely = {}` always → antecedent unsatisfiable |
+| #15 | `\A sibr \in {}` → unopposed read as dominant |
+
+> Any universally-quantified predicate needs a witness that its domain is
+> non-empty. Any threshold needs a witness that it can both fire and not fire.
+> Checked separately, never inferred.
+
+### §1.13 Cost: correctness changes dwarf domain-size changes
+
+MEASURED across the session:
+
+| Change | Kind | Effect |
+|---|---|---|
+| M3, eliminate `CHOOSE` | structural | S4: OOM → 49 s |
+| `nodeAnc` static ancestry | term size | OOM at 6 s → OOM at 877 s (no fix) |
+| bound 4 → bound 2 | domain size | **zero** (60 s → 66 s) |
+| `HeadBlockStrong` made non-vacuous | correctness | length-3: 223 s → 20+ min |
+
+Every domain-size knob reached for moved cost by nothing. The two changes that
+moved it by orders of magnitude were structural (`CHOOSE`) and correctness
+(non-vacuous predicate). A non-vacuous predicate forces genuine state-space
+exploration and the solver charges for it — that cost is the *point*, not
+overhead to be optimised away.
+
+Consequence: P1b at length 7 on full `Next` is not tractable at 5 validators,
+bound 4. `NextP1b` (§ in module) drops only `PtcVote`/`DaVote` and **retains
+`AdvEquivocate`**, because `AttScore` excludes equivocators — equivocation is the
+adversary's weight-SUBTRACTION capability, and removing it leaves an adversary
+that can only push its own fork, never degrade an incumbent. A HOLDS obtained
+that way would be worse than no result.
+
+If `NextP1b` also fails to return, P1b is reported **unresolved at reachable
+depth** — antecedent needs ≥7 steps, search does not complete — which is a
+finding about tractability, not a protocol claim.
+
 ### §1.5 What `EPBSNodes.tla` does NOT establish
 
 Stated because a complete green suite invites the opposite conclusion.

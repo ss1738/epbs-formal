@@ -258,6 +258,49 @@ measurable cost. **`VAC_BoostSuppressed` violating is the notable one**: the
 four-conjunct suppression gate — the highest reachability risk in §6, with one
 conjunct that was outright unsatisfiable in v1 — is reachable.
 
+### §1.6 `EPBSMultiSlotV2` at length 3
+
+| Invariant | Result | Time |
+|---|---|---|
+| `AncRootsUnique` | HOLDS | 489 s |
+| `S4_PayloadStatusExclusive` | HOLDS | 351 s |
+| `S5_ChildAttachesToOneBranch` | HOLDS | 446 s |
+| `S6_FullImpliesVerified` | HOLDS | 546 s |
+
+MEASURED, with actions, adversarial equivocation, the filtered block tree and the
+derived boost gate all live. `S4` — which could not be *encoded* at 12 GB this
+morning — verifies over a running transition system.
+
+Cost curve: 7-30 s at length 1-2, 351-546 s at length 3. Steeply superlinear, so
+a length-5 push is likely hours per invariant or an OOM, and should not be
+assumed to scale just because M3 removed one wall.
+
+`S4` beating `AncRootsUnique` (351 s vs 489 s) says cost tracks quantifier
+structure, not conceptual difficulty: `S4` is a membership test on `headPath`,
+`AncRootsUnique` quantifies over `nodeAnc` pairs at every state.
+
+### §1.7 THE GAP THAT MATTERS: no protocol property is stated
+
+`S4`, `S5`, `S6` and `AncRootsUnique` are **encoding-consistency** properties.
+They would catch real structural errors — and did, twice — but not one of them is
+a statement about ePBS.
+
+The questions the ESP review raised are not failing and not vacuous. They are
+**absent**:
+
+- whether a payload-timely block resists reorg,
+- how the PTC verdict couples to fork choice,
+- whether multi-slot adversarial reorgs are reachable within a budget.
+
+Every available hardening vector — longer traces, a stronger adversary, an
+inductive invariant, liveness probes — makes the *existing* properties more
+certain. None of them makes the model answer an ePBS question. Hardening first
+would repeat D5 exactly: a rigorous, machine-checked, unbounded proof of a
+theorem nobody asked about.
+
+**Order of work: state the protocol properties, watch them fail or go vacuous,
+fix that, and only then harden.**
+
 ### §1.5 What `EPBSNodes.tla` does NOT establish
 
 Stated because a complete green suite invites the opposite conclusion.

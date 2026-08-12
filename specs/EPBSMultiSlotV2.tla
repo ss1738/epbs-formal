@@ -381,41 +381,17 @@ NextWitness ==
 \* Byzantine validator's attestation, plus the proposer boost if it controls the
 \* current proposal.
 (*-------------------------------------------------------------------------*)
-(* P1. Reorg resistance under an adversary budget.                          *)
+(* P1 (DELETED). An earlier margin property, Weight(n) > Weight(sib) +        *)
+(* AdversaryCapacity, together with its probe VAC_P1_MarginTight.            *)
 (*                                                                          *)
-(* SUFFICIENT CONDITION, not the reorg property itself. A genuine reorg      *)
-(* statement is two-state ("the head does not move off a descendant"); this  *)
-(* is the one-state margin that would make such a move impossible: every     *)
-(* node on the head path beats each sibling by more than the adversary can   *)
-(* summon. If it holds, no single adversarial action can flip the head. If   *)
-(* it fails, the head is NOT robust at these bounds -- which is a finding,   *)
-(* not a bug.                                                               *)
+(* Removed because it was degenerate, not merely superseded: AdversaryCapacity*)
+(* equalled total validator weight at 3 validators, so the inequality was     *)
+(* unsatisfiable, AND the Weight it compared is zeroed by                    *)
+(* is_previous_slot_payload_decision in exactly the window that matters --    *)
+(* false at ANY validator count. P1b below replaces it, measuring with        *)
+(* AttScore on PENDING nodes, which is what is_head_weak and is_parent_strong *)
+(* do. The finding is recorded in V2_VERIFICATION_SPEC.md 1.9.               *)
 (*-------------------------------------------------------------------------*)
-P1_HeadMarginExceedsAdversary ==
-    \A n \in headPath :
-        n = GenesisNode \/
-        \A sib \in NodeChildren(NodeParent(n)) :
-            sib = n \/ Weight(n) > Weight(sib) + AdversaryCapacity
-
-\* MEASURED DEGENERATE at Validators=3, ByzValidators={v3}, ProposerBoost=2.
-\* AdversaryCapacity = 1 + 2 = 3, and total validator weight is also 3, so
-\* Weight(n) > Weight(sib) + 3 is unsatisfiable the moment any block has both a
-\* FULL and an EMPTY node. P1 violated in 8 s on blocks={0}, payloadVerified={0},
-\* headPath={(0,FULL),(0,PENDING)} -- a scale artifact, not a protocol result.
-\*
-\* This is D1's shape for the third time: a threshold that degenerates at model
-\* scale and reports something that looks like a finding. For P1 to say anything,
-\* AdversaryCapacity must be strictly less than the achievable honest margin,
-\* which needs |Validators| - |ByzValidators| > |ByzValidators| + ProposerBoost.
-\* At ProposerBoost=2 and one Byzantine validator that means 4+ honest, so 5+
-\* validators -- a real cost increase that must be paid deliberately, not by
-\* quietly reinterpreting the violation.
-\*
-\* DO NOT cite P1 at the current configuration.
-VAC_P1_MarginTight ==
-    \A n \in headPath :
-        \A sib \in NodeChildren(NodeParent(n)) :
-            sib = n \/ Weight(n) > Weight(sib) + AdversaryCapacity
 
 (*-------------------------------------------------------------------------*)
 (* P1b. THE GENUINE REORG PROPERTY (two-state, via carried history).        *)
@@ -527,14 +503,6 @@ VAC_P3_UntimelyLosesInWindow ==
 
 \* Companion: can an UNTIMELY payload lose a tie it would otherwise win? This is
 \* the same mechanism read from the other side (Tiebreaker = 0 < EMPTY's 1).
-VAC_P3_UntimelyLoses ==
-    \A b \in blocks :
-        ~( /\ b \in payloadVerified
-           /\ ~ShouldExtendPayload(b)
-           /\ [root |-> b, ps |-> EMPTY] \in headPath
-           /\ Weight([root |-> b, ps |-> EMPTY])
-                = Weight([root |-> b, ps |-> FULL]) )
-
 -----------------------------------------------------------------------------
 
 RVAC_BlockProposed  == blocks = {Genesis}

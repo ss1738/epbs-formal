@@ -876,3 +876,72 @@ Stated explicitly so no reader mistakes a plan for a result.
 
 Nothing in this repository goes to the ESP reviewers until step 6 either succeeds
 or its failure is characterized.
+
+---
+
+## §2 Probe and invariant registry
+
+Every checkable operator in the two active specs, what it asserts, and the
+outcome that means "working". **A probe whose expected result is unrecorded is
+worse than no probe** — a HOLDS looks like success either way. 13 of these were
+undocumented until a dead-code sweep found them.
+
+Probes are DELIBERATELY FALSE: for them, VIOLATED is the pass condition and
+HOLDS means the branch is unreachable, which invalidates anything that depends
+on it.
+
+Run as `apalache-mc check --cinit=ConstInit --init=Init --next=<N> --inv=<name> --length=<L> <harness>`.
+
+### `EPBSNodes.tla` / `MCEPBSNodes.tla` — static algebra, `--next=Next --length=0`
+
+| Operator | Kind | Asserts | Expected | Measured |
+|---|---|---|---|---|
+| `TypeOK` | invariant | types and domains | HOLDS | HOLDS 82 s |
+| `AncClosure` | conjunct | `nodeAnc` matches `get_ancestor` recursion | in `Derived` | — |
+| `AncRootsUnique` | invariant | one node per root in an ancestor set | HOLDS | HOLDS 77 s |
+| `S4_PayloadStatusExclusive` | invariant | FULL and EMPTY never both canonical | HOLDS | HOLDS 76 s |
+| `S5_ChildAttachesToOneBranch` | invariant | a child attaches to one parent branch | HOLDS | HOLDS 77 s |
+| `S6_FullImpliesVerified` | invariant | FULL node ⇒ payload verified | HOLDS | HOLDS 77 s |
+| `VAC_FullNodeCanonical` | probe | a FULL node can be canonical | VIOLATED | VIOLATED 100 s |
+| `VAC_EmptyNodeCanonical` | probe | an EMPTY node can be canonical | VIOLATED | VIOLATED 52 s |
+| `VAC_PrevSlotDecision` | probe | the weight-zeroing rule is reachable | VIOLATED | VIOLATED 92 s |
+| `VAC_TiebreakerZero` | probe | `Tiebreaker = 0` branch is live | VIOLATED | VIOLATED 128 s |
+| `VAC_BoostReachesDescendant` | probe | boost propagates past its own root | VIOLATED | VIOLATED 85 s |
+| `VAC_FilteredPrunes` | probe | `filter_block_tree` really prunes | VIOLATED | VIOLATED 81 s |
+| `VAC_HeadWeak` | probe | `is_head_weak` can fire (D1 guard) | VIOLATED | VIOLATED 80 s |
+| `VAC_BoostSuppressed` | probe | the 4-conjunct suppression gate is reachable | VIOLATED | VIOLATED 102 s |
+| `VAC_HeadDeep` | probe | head can leave genesis | VIOLATED | VIOLATED 54 s |
+| `VAC_HeadFull` | probe | a FULL node can be head | VIOLATED | VIOLATED 57 s |
+| `VAC_MultiBlock` | probe | trees are non-trivial | VIOLATED | VIOLATED 53 s |
+| `VAC_BoostApplies` | probe | `boostApplies` can be TRUE | VIOLATED | **weak** — free boolean in this module; says nothing about the protocol |
+
+### `EPBSMultiSlotV2.tla` / `MCEPBSMultiSlotV2.tla` — transitions
+
+| Operator | Kind | Asserts | Expected | Measured |
+|---|---|---|---|---|
+| `RVAC_SlotAdvanced` | probe | a transition is possible at all | VIOLATED | VIOLATED len 1 |
+| `RVAC_PayloadVerified` | probe | `RevealPayload` fires | VIOLATED | VIOLATED len 1, 7 s |
+| `RVAC_Equivocated` | probe | `AdvEquivocate` fires | VIOLATED | VIOLATED len 1, 11 s |
+| `RVAC_BlockProposed` | probe | `ProposeBlock` fires | VIOLATED | VIOLATED len 2, 15 s |
+| `RVAC_Attested` | probe | `Attest` fires | VIOLATED | VIOLATED len 2, 30 s |
+| `RVAC_HeadMoved` | probe | the head moves off genesis | VIOLATED | VIOLATED len 3, 3 s |
+| `VAC_PtcTimelyNonEmpty` | probe | `ptcTimely` is writable (#13 guard) | VIOLATED | VIOLATED len 3, 16 s |
+| `VAC_DaAvailableNonEmpty` | probe | `daAvailable` is writable (#13 guard) | VIOLATED | VIOLATED len 3, 18 s |
+| `VAC_BothPtcAndDa` | probe | one block in both sets | VIOLATED | VIOLATED len 4, 144 s |
+| `VAC_P3_WindowReachable` | probe | the PTC-decisive window is entered | VIOLATED | VIOLATED len 5, 56 s |
+| `VAC_P3_TiebreakDecisive` | probe | the tiebreak actually decides | VIOLATED | **VIOLATED len 7, 3037 s** |
+| `VAC_P3_UntimelyLosesInWindow` | probe | an untimely payload loses the tiebreak | VIOLATED | **not yet run** |
+| `P3_TimelyPayloadNotSkippedOnTie` | property | a timely payload is never skipped on tiebreak | HOLDS | **not run against the corrected predicate** |
+| `P2_SuppressionRequiresDuplicateProposal` | property | suppression ⇒ a duplicate proposal exists | HOLDS | **VACUOUS** — antecedent unreachable at len 3 |
+| `VAC_P2_SuppressionOccurs` | probe | suppression is reachable | VIOLATED | **HOLDS len 3** — this is why P2 is vacuous |
+| `VAC_P1b_HeadBlockMoves` | probe | the head's *block* changes | VIOLATED | VIOLATED len 3, 26 s |
+| `VAC_P1b_PrevHeadStrong` | probe | a non-genesis head can be strong | VIOLATED | HOLDS len 3, 1673 s — correct, needs len ≥ 7 |
+| `P1b_NoBlockReorgUnderBudget` | property | a strong block is not reorged | HOLDS | **UNPROVEN** — antecedent needs ≥7 steps |
+
+### Deleted
+
+| Operator | Why |
+|---|---|
+| `P1_HeadMarginExceedsAdversary` | Degenerate: compared a `Weight` that is zeroed in the window that matters, false at any validator count |
+| `VAC_P1_MarginTight` | Its probe |
+| `VAC_P3_UntimelyLoses` | Pre-#12: called `ShouldExtendPayload` without pinning the decisive window |

@@ -1,4 +1,14 @@
 -------------------------- MODULE EPBSStub --------------------------
+\* ARCHIVED v1 -- ORIGINAL ESP SUBMISSION. DO NOT BUILD ON THIS.
+\*
+\* This model carries PayloadBoost, an additive payload term in fork-choice
+\* weight. Gloas has no such term: get_weight returns attestation_score plus
+\* conditional proposer_score and nothing else. See D5_PAYLOAD_WEIGHT.md.
+\*
+\* Kept as the version of record for what was submitted, so the erratum can be
+\* checked against it. The corrected model is specs/EPBSNodes.tla and
+\* specs/EPBSMultiSlotV2.tla; the standalone finding is PTC_TIEBREAK_NOTE.md.
+\*
 (***************************************************************************)
 (* A COMPOSED model of EIP-7732: block tree, LMD-GHOST fork choice derived  *)
 (* from a vote store, and the Payload Timeliness Committee, in ONE state    *)

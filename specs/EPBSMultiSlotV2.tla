@@ -238,6 +238,126 @@ Spec == Init /\ [][Next]_varsV2
 (* the static probes in EPBSNodes -- those only showed such states exist.     *)
 (***************************************************************************)
 
+-----------------------------------------------------------------------------
+(***************************************************************************)
+(* PROTOCOL PROPERTIES.                                                     *)
+(*                                                                          *)
+(* Everything above this line checks that the ENCODING is consistent. These  *)
+(* are the first statements in this repository about ePBS itself.           *)
+(*                                                                          *)
+(* Each comes with a decisiveness probe. A property can hold because the     *)
+(* protocol enforces it, or because its precondition is unreachable -- and   *)
+(* those look identical from a green result. The probes tell them apart, and *)
+(* for P3 a vacuous outcome IS the ESP reviewer's criticism confirmed.       *)
+(***************************************************************************)
+
+\* Everything an adversary can add to one node's weight at these bounds: every
+\* Byzantine validator's attestation, plus the proposer boost if it controls the
+\* current proposal.
+AdversaryCapacity == Cardinality(ByzValidators) + ProposerBoost
+
+(*-------------------------------------------------------------------------*)
+(* P1. Reorg resistance under an adversary budget.                          *)
+(*                                                                          *)
+(* SUFFICIENT CONDITION, not the reorg property itself. A genuine reorg      *)
+(* statement is two-state ("the head does not move off a descendant"); this  *)
+(* is the one-state margin that would make such a move impossible: every     *)
+(* node on the head path beats each sibling by more than the adversary can   *)
+(* summon. If it holds, no single adversarial action can flip the head. If   *)
+(* it fails, the head is NOT robust at these bounds -- which is a finding,   *)
+(* not a bug.                                                               *)
+(*-------------------------------------------------------------------------*)
+P1_HeadMarginExceedsAdversary ==
+    \A n \in headPath :
+        n = GenesisNode \/
+        \A sib \in NodeChildren(NodeParent(n)) :
+            sib = n \/ Weight(n) > Weight(sib) + AdversaryCapacity
+
+\* Probe: is the margin ever actually TIGHT? If this holds, every head is either
+\* trivially dominant or has no siblings, and P1 says nothing.
+VAC_P1_MarginTight ==
+    \A n \in headPath :
+        \A sib \in NodeChildren(NodeParent(n)) :
+            sib = n \/ Weight(n) > Weight(sib) + AdversaryCapacity
+
+(*-------------------------------------------------------------------------*)
+(* P2. Proposer-boost suppression is strictly bound to a duplicate proposal. *)
+(*                                                                          *)
+(* should_apply_proposer_boost returns False only via the equivocations list, *)
+(* which requires a PTC-timely block by the SAME proposer at the SAME slot as *)
+(* the parent. So boost must never be suppressed in an execution where no     *)
+(* proposer ever produced two blocks in one slot. A violation means the       *)
+(* four-conjunct gate can fire without an actual equivocation -- a strictly   *)
+(* stronger adversary than the protocol grants, i.e. the D1 failure mode.     *)
+(*-------------------------------------------------------------------------*)
+P2_SuppressionRequiresDuplicateProposal ==
+    (boostRoot # 0 /\ ~boostApplies)
+    => \E r1, r2 \in blocks :
+         /\ r1 # r2
+         /\ proposer[r1] = proposer[r2]
+         /\ blockSlot[r1] = blockSlot[r2]
+
+(*-------------------------------------------------------------------------*)
+(* P3. PTC timeliness influences head selection.                            *)
+(*                                                                          *)
+(* THE DIRECT ANSWER TO THE ESP REVIEW's "multi-slot x PTC interactions are   *)
+(* unreachable". The coupling is not additive weight -- that was D5. It runs  *)
+(* through get_payload_status_tiebreaker: FULL scores 2 when                  *)
+(* should_extend_payload holds and 0 otherwise, against EMPTY's 1. So a       *)
+(* timely payload wins ties and an untimely one loses them.                   *)
+(*                                                                          *)
+(* P3 states that a timely payload is never skipped on the tiebreak: if the   *)
+(* EMPTY node of a timely block is canonical, it got there on WEIGHT, never   *)
+(* by out-ranking FULL.                                                      *)
+(*-------------------------------------------------------------------------*)
+P3_TimelyPayloadNotSkippedOnTie ==
+    \A b \in blocks :
+        ( /\ b \in ptcTimely /\ b \in daAvailable
+          /\ ShouldExtendPayload(b)
+          /\ [root |-> b, ps |-> EMPTY] \in headPath )
+        => Weight([root |-> b, ps |-> EMPTY]) > Weight([root |-> b, ps |-> FULL])
+
+\* THE PROBE THAT MATTERS. Deliberately false: it asserts the payload tiebreak
+\* is never DECISIVE -- never the thing that picks FULL over an equally-weighted
+\* EMPTY. VIOLATED means the PTC verdict genuinely reaches fork choice in this
+\* model. HOLDS means the coupling is unreachable at these bounds, which is
+\* precisely the reviewer's objection, confirmed rather than answered.
+VAC_P3_TiebreakDecisive ==
+    \A b \in blocks :
+        ~( /\ PtcIsDecisiveFor(b)
+           /\ b \in ptcTimely
+           /\ b \in daAvailable
+           /\ [root |-> b, ps |-> FULL] \in headPath
+           /\ Weight([root |-> b, ps |-> FULL])
+                = Weight([root |-> b, ps |-> EMPTY]) )
+
+\* Can the decisive window be entered at all? If this HOLDS, the three permissive
+\* disjuncts of should_extend_payload always cover the case and the PTC verdict
+\* never decides anything -- which would be the ESP objection confirmed at a
+\* deeper level than "unreachable state space".
+VAC_P3_WindowReachable == \A b \in blocks : ~PtcIsDecisiveFor(b)
+
+\* Within the window, does an UNTIMELY payload actually lose? Tiebreaker 0 < 1.
+VAC_P3_UntimelyLosesInWindow ==
+    \A b \in blocks :
+        ~( /\ PtcIsDecisiveFor(b)
+           /\ ~(b \in ptcTimely /\ b \in daAvailable)
+           /\ [root |-> b, ps |-> EMPTY] \in headPath
+           /\ Weight([root |-> b, ps |-> EMPTY])
+                = Weight([root |-> b, ps |-> FULL]) )
+
+\* Companion: can an UNTIMELY payload lose a tie it would otherwise win? This is
+\* the same mechanism read from the other side (Tiebreaker = 0 < EMPTY's 1).
+VAC_P3_UntimelyLoses ==
+    \A b \in blocks :
+        ~( /\ b \in payloadVerified
+           /\ ~ShouldExtendPayload(b)
+           /\ [root |-> b, ps |-> EMPTY] \in headPath
+           /\ Weight([root |-> b, ps |-> EMPTY])
+                = Weight([root |-> b, ps |-> FULL]) )
+
+-----------------------------------------------------------------------------
+
 RVAC_BlockProposed  == blocks = {Genesis}
 RVAC_SlotAdvanced   == slot = 0
 RVAC_PayloadVerified== payloadVerified = {}

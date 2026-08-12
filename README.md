@@ -81,6 +81,25 @@ graph TD
     D -.-> K["proposer boost never reached<br/>INERT in this window"]
 ```
 
+### Why: fork-choice nodes are not blocks
+
+Gloas descends a tree of `(root, payload_status)` nodes. A block yields a PENDING
+node, which yields EMPTY always and FULL only if the payload is verified. Each
+child block attaches to exactly one of them, per the parent status fixed in its
+own body at signing time. The PTC verdict adds no weight anywhere — it decides
+whether the FULL node exists, and which of the two wins the tiebreak.
+
+```mermaid
+graph TD
+    P0["block A<br/>node A-PENDING"] --> P1["A-EMPTY<br/>always exists"]
+    P0 -.->|"only if is_payload_verified A"| P2["A-FULL<br/>candidate node"]
+    P1 --> C1["block B declared parent EMPTY<br/>node B-PENDING"]
+    P2 --> C2["block C declared parent FULL<br/>node C-PENDING"]
+    C1 --> C1a["B-EMPTY"]
+    C2 --> C2a["C-EMPTY"]
+    style P2 stroke-dasharray: 5 5
+```
+
 Full derivation, spec quotes and the machine-checked witness:
 [`PTC_TIEBREAK_NOTE.md`](PTC_TIEBREAK_NOTE.md).
 

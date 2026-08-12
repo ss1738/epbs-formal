@@ -38,6 +38,33 @@ graph TD
 The dotted edge is the consequence: the early return in `get_weight` precedes the
 `is_ancestor(proposer_boost_node, node)` branch entirely.
 
+## The structure this rests on: fork-choice nodes are not blocks
+
+Gloas fork choice descends a tree of `(root, payload_status)` **nodes**, not
+blocks. Every block contributes a PENDING node, which yields an EMPTY node
+always and a FULL node only when the payload is verified. A child block then
+attaches to **exactly one** of those two, according to the parent status it
+declared when it was signed.
+
+```mermaid
+graph TD
+    P0["block A<br/>node A-PENDING"] --> P1["A-EMPTY<br/>always exists"]
+    P0 -.->|"only if is_payload_verified A"| P2["A-FULL<br/>candidate node"]
+    P1 --> C1["block B declared parent EMPTY<br/>node B-PENDING"]
+    P2 --> C2["block C declared parent FULL<br/>node C-PENDING"]
+    C1 --> C1a["B-EMPTY"]
+    C2 --> C2a["C-EMPTY"]
+    style P2 stroke-dasharray: 5 5
+```
+
+Two consequences that matter for the claim:
+
+- A block never attaches to both branches. `get_node_children` filters children
+  by `get_parent_payload_status`, which is read from the child's own body and is
+  therefore fixed at signing time.
+- The PTC verdict does not add weight anywhere. It determines whether the FULL
+  node **exists as a candidate**, and then which of the two wins the tiebreak.
+
 ---
 
 ## Derivation
@@ -124,6 +151,26 @@ The committee's verdict is load-bearing only when all three are false:
 - the boosted block's parent **is** `root`, **and**
 - the boosted block declared its parent **EMPTY**.
 
+```mermaid
+graph TD
+    S["should_extend_payload of r"] --> V{"is_payload_verified r"}
+    V -- No --> F0["FALSE<br/>FULL scores 0, loses"]
+    V -- Yes --> D1{"PTC timely AND data available"}
+    D1 -- Yes --> T1["TRUE"]
+    D1 -- No --> D2{"proposer_boost_root is empty"}
+    D2 -- Yes --> T2["TRUE<br/>PTC irrelevant"]
+    D2 -- No --> D3{"boosted block's parent is NOT r"}
+    D3 -- Yes --> T3["TRUE<br/>PTC irrelevant"]
+    D3 -- No --> D4{"boosted block declared parent FULL"}
+    D4 -- Yes --> T4["TRUE<br/>PTC irrelevant"]
+    D4 -- No --> W["ONLY HERE does the PTC verdict decide"]
+    style W stroke-width:3px
+```
+
+The three `PTC irrelevant` exits are why the window is narrow: the committee's
+verdict is load-bearing only when the current proposer built directly on `r`
+**and** declared its payload EMPTY.
+
 In plain terms: the PTC verdict decides only when the current proposer built
 directly on `root` and declined its payload. Everywhere else the payload is
 extended regardless of what the committee said.
@@ -152,6 +199,19 @@ payloadVerified = ptcTimely = daAvailable = {0}
 proposer_boost_root = 2           should_apply_proposer_boost = TRUE
 head = (0, FULL)                  headPath = {(0,FULL), (0,PENDING)}
 latestMsg: all validators at slot 0, present = FALSE   <-- nobody attested
+```
+
+The five transitions that reach it, each a real action of the model:
+
+```mermaid
+graph LR
+    S0["State 0<br/>genesis only<br/>slot 0"] --> S1["AdvanceSlot<br/>slot becomes 1"]
+    S1 --> S2["RevealPayload block 0<br/>payloadVerified gains 0"]
+    S2 --> S3["PtcVote block 0<br/>ptcTimely gains 0"]
+    S3 --> S4["DaVote block 0<br/>daAvailable gains 0"]
+    S4 --> S5["ProposeBlock 2 on parent 0<br/>declares parent EMPTY<br/>boostRoot becomes 2"]
+    S5 --> W["WINDOW ENTERED<br/>get_weight zero on both<br/>tiebreaker decides"]
+    style W stroke-width:3px
 ```
 
 Two things this pins down that the prose above does not:

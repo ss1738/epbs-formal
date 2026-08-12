@@ -352,6 +352,42 @@ information. Derived from the action preconditions, not observed. Length 5 is th
 first run that can answer it, and length 5 is the regime where cost was already
 351-546 s at length 3.
 
+### §1.9 First protocol-property results
+
+| Check | len | Result | Time | Reading |
+|---|---|---|---|---|
+| `VAC_P3_WindowReachable` | 2 | HOLDS | 47 s | no information — window needs 5 steps |
+| `VAC_P3_WindowReachable` | 5 | **VIOLATED** | 74 s | **the PTC-decisive window is reachable** |
+| `P2_SuppressionRequiresDuplicateProposal` | 3 | HOLDS | 406 s | **VACUOUS** — see below |
+| `VAC_P2_SuppressionOccurs` | 3 | HOLDS | — | suppression never reached at depth 3 |
+| `P1_HeadMarginExceedsAdversary` | 3 | VIOLATED | 8 s | **DEGENERATE** — see below |
+
+**P3's window is reachable, and the hand-derived path was right.** The five-step
+execution predicted in §1.8 is realisable: length 2 could not reach it, length 5
+does. So the model is capable of the state, no self-inflicted precondition blocks
+it, and P3 is a meaningful question rather than a vacuous one. Had length 5
+reported HOLDS, the first suspect would have been this module's own action guards,
+not Gloas.
+
+**P2 is vacuous at depth 3.** It is an implication whose antecedent is
+`boostRoot # 0 /\ ~boostApplies`. `VAC_P2_SuppressionOccurs` HOLDS at length 3, so
+that antecedent is never reached and P2's 406 s green says nothing whatever. The
+static module's `VAC_BoostSuppressed` did violate — but existence in the static
+domain and reachability under actions are different questions, and only the second
+one licenses citing P2. Re-running at lengths 5 and 6.
+
+**P1 is degenerate, not a finding.** `AdversaryCapacity = |ByzValidators| +
+ProposerBoost = 1 + 2 = 3`, and total validator weight is also 3, so
+`Weight(n) > Weight(sib) + 3` is unsatisfiable as soon as any block has both a
+FULL and an EMPTY node. The violating state is `blocks = {0}`,
+`payloadVerified = {0}`, `headPath = {(0,FULL),(0,PENDING)}` — genesis with a
+verified payload. This is D1's shape for the third time today: a threshold that
+degenerates at model scale and produces something shaped like a result. Making P1
+meaningful needs
+`|Validators| - |ByzValidators| > |ByzValidators| + ProposerBoost`, i.e. 5+
+validators at the current boost — a cost increase to be paid deliberately.
+**P1 must not be cited at this configuration.**
+
 ### §1.5 What `EPBSNodes.tla` does NOT establish
 
 Stated because a complete green suite invites the opposite conclusion.

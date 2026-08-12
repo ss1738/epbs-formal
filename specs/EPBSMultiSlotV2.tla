@@ -273,8 +273,21 @@ P1_HeadMarginExceedsAdversary ==
         \A sib \in NodeChildren(NodeParent(n)) :
             sib = n \/ Weight(n) > Weight(sib) + AdversaryCapacity
 
-\* Probe: is the margin ever actually TIGHT? If this holds, every head is either
-\* trivially dominant or has no siblings, and P1 says nothing.
+\* MEASURED DEGENERATE at Validators=3, ByzValidators={v3}, ProposerBoost=2.
+\* AdversaryCapacity = 1 + 2 = 3, and total validator weight is also 3, so
+\* Weight(n) > Weight(sib) + 3 is unsatisfiable the moment any block has both a
+\* FULL and an EMPTY node. P1 violated in 8 s on blocks={0}, payloadVerified={0},
+\* headPath={(0,FULL),(0,PENDING)} -- a scale artifact, not a protocol result.
+\*
+\* This is D1's shape for the third time: a threshold that degenerates at model
+\* scale and reports something that looks like a finding. For P1 to say anything,
+\* AdversaryCapacity must be strictly less than the achievable honest margin,
+\* which needs |Validators| - |ByzValidators| > |ByzValidators| + ProposerBoost.
+\* At ProposerBoost=2 and one Byzantine validator that means 4+ honest, so 5+
+\* validators -- a real cost increase that must be paid deliberately, not by
+\* quietly reinterpreting the violation.
+\*
+\* DO NOT cite P1 at the current configuration.
 VAC_P1_MarginTight ==
     \A n \in headPath :
         \A sib \in NodeChildren(NodeParent(n)) :
@@ -310,6 +323,13 @@ P2_SuppressionRequiresDuplicateProposal ==
 (* EMPTY node of a timely block is canonical, it got there on WEIGHT, never   *)
 (* by out-ranking FULL.                                                      *)
 (*-------------------------------------------------------------------------*)
+\* Is boost suppression reachable in the TRANSITION SYSTEM at all? P2 is an
+\* implication whose antecedent is (boostRoot # 0 /\ ~boostApplies); if that is
+\* never reached, P2 holds trivially and says nothing. The static module's
+\* VAC_BoostSuppressed violated, but reachability under actions is a different
+\* question and must be asked separately.
+VAC_P2_SuppressionOccurs == ~(boostRoot # 0 /\ ~boostApplies)
+
 P3_TimelyPayloadNotSkippedOnTie ==
     \A b \in blocks :
         ( /\ b \in ptcTimely /\ b \in daAvailable

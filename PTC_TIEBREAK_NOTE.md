@@ -23,13 +23,13 @@ this window.** Not merely outweighed — never evaluated.
 
 ```mermaid
 graph TD
-    A["get_head descends to a child node<br/>n = (root r, payload_status ps)"] --> B{"is_previous_slot_payload_decision(n)<br/>blocks[r].slot + 1 == current_slot<br/>AND ps in EMPTY, FULL"}
+    A["get_head descends to a child node<br/>n = root r with payload_status ps"] --> B{"is_previous_slot_payload_decision of n<br/>slot of r, plus 1, equals current slot<br/>AND ps is EMPTY or FULL"}
     B -- No --> C["get_weight returns<br/>attestation_score + proposer_score<br/>tiebreaker returns ps"]
-    B -- Yes --> D["get_weight returns Gwei 0<br/>FIRST LINE, before the boost branch"]
-    D --> E["Both (r,EMPTY) and (r,FULL) qualify:<br/>same root, so same slot"]
-    E --> F["Key (weight, root, tiebreaker):<br/>weight ties at 0, root ties"]
+    B -- Yes --> D["get_weight returns zero<br/>FIRST LINE, before the boost branch"]
+    D --> E["Both r-EMPTY and r-FULL qualify<br/>same root, so same slot"]
+    E --> F["Sort key weight, root, tiebreaker<br/>weight ties at 0 and root ties"]
     F --> G["get_payload_status_tiebreaker decides ALONE"]
-    G --> H{"should_extend_payload(r)"}
+    G --> H{"should_extend_payload of r"}
     H -- True --> I["FULL scores 2, beats EMPTY 1"]
     H -- False --> J["FULL scores 0, loses to EMPTY 1"]
     D -.-> K["proposer boost never reached<br/>INERT in this window"]

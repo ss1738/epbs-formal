@@ -301,6 +301,57 @@ theorem nobody asked about.
 **Order of work: state the protocol properties, watch them fail or go vacuous,
 fix that, and only then harden.**
 
+### §1.8 Finding #12 — `should_extend_payload`, and what the PTC actually governs
+
+The full spec:
+
+```python
+def should_extend_payload(store, root) -> bool:
+    assert store.blocks[root].slot + 1 == get_current_slot(store)
+    if not is_payload_verified(store, root): return False
+    proposer_root = store.proposer_boost_root
+    return ((payload_is_timely and payload_data_is_available)
+            or proposer_root == Root()
+            or store.blocks[proposer_root].parent_root != root
+            or is_parent_node_full(store, store.blocks[proposer_root]))
+```
+
+Four disjuncts and a precondition. The module had the first two and described the
+omission as "conservative". **It is not conservative — the missing disjuncts are
+permissive**, and reading all four together gives a protocol fact this repository
+had backwards:
+
+> Extension proceeds **unless** the boosted block is a direct child of `r` that
+> declared `r` EMPTY. The PTC verdict is decisive only inside that window.
+> Everywhere else the payload is extended regardless of what the committee voted.
+
+PTC timeliness does not broadly govern the tiebreak. It governs one configuration.
+
+The dropped `assert` caused a concrete false positive. `Tiebreaker` only calls
+`should_extend_payload` under `IsPrevSlotPayloadDecision`, so the module was safe;
+but `VAC_P3_TiebreakDecisive` called it *directly*, evaluating it where the assert
+would fail (`blockSlot[0] = 0`, `slot = 0`). It produced a 7-second "PTC influences
+fork choice" witness whose state had **`ptcTimely = {}`** — an empty committee.
+`ShouldExtendPayload` now carries the precondition as a guard so it cannot be read
+outside its domain.
+
+`PtcIsDecisiveFor(r)` names the window, and `VAC_P3_WindowReachable` probes it.
+
+**The window needs five steps, so short runs say nothing.** `AdvanceSlot` zeroes
+`boostRoot`, so the boosted block must be proposed *after* the slot boundary that
+makes `r` previous-slot:
+
+1. `AdvanceSlot` → slot 1
+2. `ProposeBlock(r=1, par=0)` → `boostRoot = 1`
+3. `RevealPayload(1)`
+4. `AdvanceSlot` → slot 2, `boostRoot = 0`
+5. `ProposeBlock(2, par=1, EMPTY)` → `boostRoot = 2`
+
+`VAC_P3_WindowReachable` HOLDS at length 2 (47 s) — expected and carrying no
+information. Derived from the action preconditions, not observed. Length 5 is the
+first run that can answer it, and length 5 is the regime where cost was already
+351-546 s at length 3.
+
 ### §1.5 What `EPBSNodes.tla` does NOT establish
 
 Stated because a complete green suite invites the opposite conclusion.

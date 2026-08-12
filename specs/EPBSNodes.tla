@@ -242,14 +242,40 @@ Weight(n) ==
     ELSE AttScore(n)
          + (IF boostApplies /\ BoostInSubtree(n) THEN ProposerBoost ELSE 0)
 
-\* should_extend_payload, gloas. Omits the two disjuncts that need blockParent
-\* of boostRoot; those return TRUE more often, so this under-approximates and
-\* is conservative for the FULL branch.
+\* should_extend_payload, gloas -- FULL transcription. The earlier version
+\* omitted three things and each mattered:
+\*
+\*   assert store.blocks[root].slot + 1 == get_current_slot(store)
+\*
+\* is a PRECONDITION, not decoration. Evaluated outside it the predicate is
+\* meaningless, and a probe that called this directly rather than through
+\* Tiebreaker's IsPrevSlotPayloadDecision guard produced a "PTC influences fork
+\* choice" witness in a state with an empty PTC. Encoded as a guard so the
+\* predicate cannot be read outside its domain at all.
+\*
+\* The two missing disjuncts are both about the BOOSTED block's relationship to
+\* r, and they are permissive: extension proceeds unless the boosted block is a
+\* direct child of r that declared r EMPTY. So the PTC verdict is decisive only
+\* in that narrow window -- everywhere else the payload is extended regardless
+\* of what the committee said. That window is what P3 must target.
 \* @type: (Int) => Bool;
 ShouldExtendPayload(r) ==
+    /\ blockSlot[r] + 1 = slot                       \* the assert
     /\ r \in payloadVerified
-    /\ \/ (r \in ptcTimely /\ r \in daAvailable)
+    /\ \/ (r \in ptcTimely /\ r \in daAvailable)      \* the PTC path
        \/ boostRoot = 0
+       \/ blockParent[boostRoot] # r
+       \/ parentStatus[boostRoot] = FULL              \* is_parent_node_full
+
+\* The window in which the PTC verdict is the ONLY thing deciding extension:
+\* all three non-PTC disjuncts false. Outside it, timeliness is irrelevant.
+\* @type: (Int) => Bool;
+PtcIsDecisiveFor(r) ==
+    /\ blockSlot[r] + 1 = slot
+    /\ r \in payloadVerified
+    /\ boostRoot # 0
+    /\ blockParent[boostRoot] = r
+    /\ parentStatus[boostRoot] # FULL
 
 \* get_payload_status_tiebreaker, gloas. FULL scores 2 ONLY when
 \* should_extend_payload holds, otherwise 0 -- below EMPTY's 1.

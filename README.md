@@ -40,8 +40,19 @@
 > | [`V2_VERIFICATION_SPEC.md`](V2_VERIFICATION_SPEC.md) | Measured results, cost curves, and 15 findings including 3 self-inflicted |
 > | [`REBUILD_BLUEPRINT.md`](REBUILD_BLUEPRINT.md) | v2 architecture, read function-by-function from `gloas/fork-choice.md` |
 >
-> **Current specs:** `specs/EPBSNodes.tla` (node algebra) and
-> `specs/EPBSMultiSlotV2.tla` (transitions, adversary, filtered block tree).
+> ### What is active, what is archived
+>
+> | Component | Status | Role |
+> |---|---|---|
+> | `PTC_TIEBREAK_NOTE.md` | **primary** | The finding: bounded, spec-quoted, machine-checked |
+> | `specs/EPBSNodes.tla` | **active** | Node algebra on `(root, payload_status)` |
+> | `specs/EPBSMultiSlotV2.tla` | **active** | Transitions, adversary, filtered block tree |
+> | `specs/MCEPBSNodes.tla`, `specs/MCEPBSMultiSlotV2.tla` | **active** | Apalache harnesses (`ConstInit`, bounds) |
+> | `specs/EPBSPTC.tla`, `specs/EPBSChain.tla`, `specs/EPBS.tla` | active, unaffected | Committee timing, chain payments — no payload-weight dependency |
+> | `specs/EPBSForkChoice.tla`, `specs/EPBSMultiSlot.tla`, `specs/EPBSStub.tla` | **archived v1** | Carry `PayloadBoost`; headers point at D5 |
+> | `SCALING_RESPONSE.md` | **archived** | Record of what was claimed to ESP |
+> | `coq/EPBSPayment.v`, `coq/EPBSEquivocation.v` | active | Payment conservation, binding — unaffected by D5 |
+> | `coq/EPBSForkChoice.v` | **deleted** | Proved a threshold over `PayloadBoost` |
 >
 > **Still open:** reorg resistance is unproven — the antecedent needs ≥7 steps and
 > the search does not complete at 5 validators. `specs/EPBSPTC.tla`,

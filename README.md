@@ -3,41 +3,52 @@
 [![verify](https://github.com/ss1738/epbs-formal/actions/workflows/verify.yml/badge.svg)](https://github.com/ss1738/epbs-formal/actions/workflows/verify.yml)
 
 
-> ## ⚠ Under structural revision — parts of this README are known false
+> ## Start here: [`PTC_TIEBREAK_NOTE.md`](PTC_TIEBREAK_NOTE.md)
 >
-> An audit on 2026-08-11 found five modelling defects (D1–D5). The most serious:
-> **Gloas adds no payload weight to fork choice.** `get_weight` returns
-> `attestation_score + proposer_score` and contains no payload term. Payload
-> timeliness works through *node identity* — `get_node_children` spawns a FULL
-> candidate node only when `is_payload_verified` holds, and `get_head` resolves
-> full-vs-empty with `get_payload_status_tiebreaker`.
+> That note is the current, bounded, spec-checkable finding. Most of this README
+> describes v1, which an audit on 2026-08-11 showed is built on a mechanism the
+> protocol does not have.
 >
-> Claims below that are **superseded**:
+> **What was wrong.** Gloas adds **no payload weight** to fork choice.
+> `get_weight` returns `attestation_score + proposer_score` and contains no
+> payload term. v1 modelled a `PayloadBoost` and measured a reorg threshold over
+> it. That predates the ESP submission. See
+> [`D5_PAYLOAD_WEIGHT.md`](D5_PAYLOAD_WEIGHT.md).
 >
-> - *"measures the exact weight threshold at which a timely payload becomes
->   reorg-safe"* — that threshold is defined over a weight the protocol does not
->   have. This predates the ESP submission.
-> - *"`coq/EPBSForkChoice.v` proves the reorg threshold for all non-negative
->   weights"* — the theorem is machine-checked and correct **about the model**; the
->   model's mechanism is not the protocol's. The payment proofs
->   (`coq/EPBSPayment.v`) are unaffected.
-> - *"the invariants are shown to have teeth"* — true when written; after the D2
->   correction the main fork-choice invariant went vacuous under the withhold
->   configuration.
-> - *"the `is_head_weak` / `is_parent_strong` reorg gate"* — `is_head_weak` is also
->   called from `should_apply_proposer_boost` inside `get_weight`, so it is a
->   fork-choice constraint, not only an honest-proposer gate.
+> **What is actually true**, verified against `gloas/fork-choice.md` and
+> witnessed by an Apalache trace: payload timeliness enters through *node
+> identity*, not weight. For a block one slot old, `get_weight` returns **zero for
+> both** its FULL and EMPTY nodes, so `get_head`'s `(weight, root, tiebreaker)`
+> key collapses and `get_payload_status_tiebreaker` decides alone. Proposer boost
+> is **inert** in that window — never evaluated, because the early return precedes
+> the boost branch.
 >
-> **Read these first:**
+> **Removed:** `coq/EPBSForkChoice.v`. It proved a reorg threshold over
+> `PayloadBoost` — machine-checked, and about a quantity that does not exist. The
+> payment proofs (`coq/EPBSPayment.v`) are unaffected; they do not depend on
+> payload weight.
+>
+> **Archived, not deleted:** `specs/EPBSForkChoice.tla`, `specs/EPBSMultiSlot.tla`,
+> `specs/EPBSStub.tla` and [`SCALING_RESPONSE.md`](SCALING_RESPONSE.md) carry
+> headers marking them superseded. They are the version of record for what was
+> submitted, so the erratum can be checked against them.
 >
 > | Document | What it is |
 > |---|---|
+> | [`PTC_TIEBREAK_NOTE.md`](PTC_TIEBREAK_NOTE.md) | **The finding.** Bounded, spec-quoted, machine-checked witness |
 > | [`D5_PAYLOAD_WEIGHT.md`](D5_PAYLOAD_WEIGHT.md) | The erratum: why the payload-weight mechanism is phantom |
-> | [`REBUILD_BLUEPRINT.md`](REBUILD_BLUEPRINT.md) | v2 architecture, read function-by-function from `gloas/fork-choice.md`. Includes diagrams of the alternating node tree and the cross-slot boost-suppression attack |
-> | [`SCALING_RESPONSE.md`](SCALING_RESPONSE.md) | Response to the EF ESP review, with its own retraction banner and the TLC/Apalache pipeline diagram |
+> | [`V2_VERIFICATION_SPEC.md`](V2_VERIFICATION_SPEC.md) | Measured results, cost curves, and 15 findings including 3 self-inflicted |
+> | [`REBUILD_BLUEPRINT.md`](REBUILD_BLUEPRINT.md) | v2 architecture, read function-by-function from `gloas/fork-choice.md` |
 >
-> The CI badge above reflects the *old* specs, which still check green. That is the
-> point of the problem, not evidence against it.
+> **Current specs:** `specs/EPBSNodes.tla` (node algebra) and
+> `specs/EPBSMultiSlotV2.tla` (transitions, adversary, filtered block tree).
+>
+> **Still open:** reorg resistance is unproven — the antecedent needs ≥7 steps and
+> the search does not complete at 5 validators. `specs/EPBSPTC.tla`,
+> `specs/EPBSChain.tla` and the payment proofs are unaffected by D5.
+>
+> The CI badge reflects the *old* specs, which still check green. That is the
+> problem, not evidence against it.
 
 A machine-checkable formal model of **Enshrined Proposer-Builder Separation (ePBS)** as specified in **[EIP-7732](https://eips.ethereum.org/EIPS/eip-7732)**, the proposer/builder split that Ethereum's Glamsterdam upgrade brings into the consensus protocol itself.
 
@@ -58,7 +69,6 @@ Milestone 2 is under way: `specs/EPBSForkChoice.tla` adds an explicit payload-ti
 Milestone 3 is well under way, with two standalone Coq (Rocq Prover) developments that lift the strongest results from a finite instance to all sizes:
 
 - `coq/EPBSPayment.v` proves the payment core for **all** bid values, **all** balances, and **any** number of builders: conservation, the G1 and G3 payment guarantees, no dangling escrow, and commitment binding.
-- `coq/EPBSForkChoice.v` proves the reorg threshold for **all** non-negative weights: a timely payload is canonical against any adversary above the threshold, is reorged by the worst-case adversary below it, and the exact iff characterization in between.
 
 All are machine-checked theorems with no axioms or admitted goals. See `coq/README.md`.
 

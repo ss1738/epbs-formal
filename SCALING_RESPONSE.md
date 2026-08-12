@@ -1,3 +1,14 @@
+> # SUPERSEDED — historical record, not current material
+>
+> This was drafted as a reply to the EF ESP review. It is kept **only** as the
+> record of what was claimed, so the corrections in `D5_PAYLOAD_WEIGHT.md` can be
+> checked against it. Several claims here are known false — see the retraction
+> banner below and D5.
+>
+> It is also moot as a reply: ESP funding runs through RFPs and the Wishlist, and
+> this work maps to neither. The current, bounded finding is
+> [`PTC_TIEBREAK_NOTE.md`](PTC_TIEBREAK_NOTE.md).
+
 # ePBS formal model — response to the ESP review
 
 > ## ⚠ RETRACTED IN PART — DO NOT CITE THE METRICS

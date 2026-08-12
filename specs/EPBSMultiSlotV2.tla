@@ -230,6 +230,36 @@ Next ==
 
 Spec == Init /\ [][Next]_varsV2
 
+\* WITNESS-HUNTING SUB-MODEL. Six of the seven actions; only AdvEquivocate is
+\* dropped, since no P3 property mentions `equivocators`.
+\*
+\* AN EARLIER VERSION ALSO DROPPED PtcVote AND DaVote. That was wrong and it was
+\* wrong SILENTLY. VAC_P3_TiebreakDecisive requires b \in ptcTimely /\ b \in
+\* daAvailable; with those two actions removed, nothing can ever add to those
+\* sets, so the antecedent was unsatisfiable and the invariant held VACUOUSLY at
+\* every length. Runs at lengths 5, 7 and 9 were foregone conclusions.
+\*
+\* The sanity check missed it: VAC_P3_WindowReachable calls PtcIsDecisiveFor,
+\* which does not reference ptcTimely, so it validated ONE precondition and said
+\* nothing about the others.
+\*
+\* RULE. Before restricting Next, take the target property's free variables and
+\* confirm that some retained action can write EACH of them. A sub-model that
+\* cannot reach a property's antecedent does not test that property.
+\*
+\* SOUND FOR VIOLATIONS ONLY. Every disjunct here is a real action of Next, so
+\* any trace found is a genuine execution of the full model. A HOLDS under this
+\* Next is STRICTLY WEAKER than a HOLDS under Next and must never be reported as
+\* one -- it only says no witness exists among executions using these four
+\* actions.
+NextWitness ==
+    \/ \E b, par \in Ids : \E ps \in {EMPTY, FULL} : ProposeBlock(b, par, ps)
+    \/ \E b \in Ids : RevealPayload(b)
+    \/ \E b \in Ids : PtcVote(b)
+    \/ \E b \in Ids : DaVote(b)
+    \/ \E v \in Validators : \E b \in Ids : \E pr \in BOOLEAN : Attest(v, b, pr)
+    \/ AdvanceSlot
+
 -----------------------------------------------------------------------------
 (***************************************************************************)
 (* Reachability probes. Each is deliberately FALSE; VIOLATED is the desired  *)
@@ -356,6 +386,13 @@ VAC_P3_TiebreakDecisive ==
 \* never decides anything -- which would be the ESP objection confirmed at a
 \* deeper level than "unreachable state space".
 VAC_P3_WindowReachable == \A b \in blocks : ~PtcIsDecisiveFor(b)
+
+\* ANTECEDENT-WRITABILITY PROBES. One per set the P3 properties read. These are
+\* what should have been run before any restricted Next was trusted -- each is
+\* deliberately false and a HOLDS means no retained action can populate that set.
+VAC_PtcTimelyNonEmpty  == ptcTimely = {}
+VAC_DaAvailableNonEmpty == daAvailable = {}
+VAC_BothPtcAndDa       == \A b \in blocks : ~(b \in ptcTimely /\ b \in daAvailable)
 
 \* Within the window, does an UNTIMELY payload actually lose? Tiebreaker 0 < 1.
 VAC_P3_UntimelyLosesInWindow ==

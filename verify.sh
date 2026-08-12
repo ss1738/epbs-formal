@@ -90,6 +90,10 @@ else
 fi
 exit "$fail"
 
+echo
+echo "Probe registry (check_registry.sh):"
+if ./check_registry.sh; then :; else fail=1; fi
+
 # ---------------------------------------------------------------------------
 # NOT COVERED BY THIS SCRIPT
 #

@@ -55,8 +55,13 @@ coq_check() { # file
 
 echo "TLA+ models (TLC):"
 tlc_green            "single-slot safety"  EPBS.cfg               EPBS.tla
-tlc_green            "fork-choice (safe)"  EPBSForkChoice.cfg     EPBSForkChoice.tla
-tlc_expect_violation "fork-choice (attack)" EPBSForkChoice_attack.cfg EPBSForkChoice.tla FC_TimelyPayloadSafe
+# ARCHIVED v1. These two exercise EPBSForkChoice.tla, which models PayloadBoost
+# -- an additive payload term Gloas does not have (D5_PAYLOAD_WEIGHT.md). They
+# still pass, which is exactly the problem: a green badge here says nothing about
+# the corrected model. Kept so the archived specs remain runnable against the
+# erratum, and labelled so the output cannot be mistaken for current coverage.
+tlc_green            "[ARCHIVED v1] fork-choice (safe)"  EPBSForkChoice.cfg     EPBSForkChoice.tla
+tlc_expect_violation "[ARCHIVED v1] fork-choice (attack)" EPBSForkChoice_attack.cfg EPBSForkChoice.tla FC_TimelyPayloadSafe
 tlc_green            "multi-slot chain"    EPBSChain.cfg          EPBSChain.tla
 tlc_green            "timed PTC votes"     EPBSPTC.cfg            EPBSPTC.tla
 tlc_green            "weight-quorum payment" EPBSWeightPayment.cfg EPBSWeightPayment.tla
@@ -84,3 +89,19 @@ else
   echo "SOME CHECKS FAILED"
 fi
 exit "$fail"
+
+# ---------------------------------------------------------------------------
+# NOT COVERED BY THIS SCRIPT
+#
+# The current models -- specs/EPBSNodes.tla and specs/EPBSMultiSlotV2.tla --
+# require Apalache (symbolic, SMT), not TLC, and their runs take minutes to
+# hours. Nothing above exercises them, so a green result here does NOT mean the
+# corrected model is verified.
+#
+# Their measured results live in V2_VERIFICATION_SPEC.md with per-row bounds and
+# commands. Reproduce with, e.g.:
+#
+#   ./set_bounds.sh 2
+#   apalache-mc check --cinit=ConstInit --init=Init --next=NextWitness \
+#     --inv=VAC_P3_TiebreakDecisive --length=7 specs/MCEPBSMultiSlotV2.tla
+# ---------------------------------------------------------------------------

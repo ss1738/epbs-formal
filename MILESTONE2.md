@@ -1,3 +1,9 @@
+> **RETRACTED (2026-08-11).** The reorg-threshold results below were proved over
+> `PayloadBoost`, an additive payload term in fork-choice weight that Gloas does
+> not have. `coq/EPBSForkChoice.v` has been DELETED. Reorg resistance is
+> currently **UNPROVEN** — see `V2_VERIFICATION_SPEC.md` §1.12. Kept as the
+> record of what was claimed; see `D5_PAYLOAD_WEIGHT.md`.
+
 # Milestone 2: Fork-Choice Model and the Reorg Threshold
 
 `specs/EPBSForkChoice.tla` extends the milestone-1 model where its most important abstraction was: milestone 1 chose the beacon block's fate (canonical or reorged) nondeterministically. This model **derives** that fate from an explicit payload-timeliness fork choice, so the reorg attack EIP-7732 warns about can be expressed and its threshold measured.

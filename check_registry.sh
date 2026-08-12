@@ -47,10 +47,16 @@ while read -r op; do
     # the "### Deleted" table itself. Using /,$p (to end of file) would silently
     # exempt anything added after it -- caught by a negative test.
     if sed -n '/^### Deleted/,/^## /p' "$REG" | grep -q "| \`$op\` |"; then continue; fi
+    # (unregistered-direction check still scans the specs, which is correct)
     echo "  STALE IN REGISTRY  $op   (no longer defined)"
     stale=$((stale + 1))
   fi
-done < <(grep -oE '`(VAC_[A-Za-z0-9_]+|RVAC_[A-Za-z0-9_]+|S[0-9]_[A-Za-z0-9_]+|P[0-9][A-Za-z0-9_]*)`' "$REG" \
+# Scope to the section 2 registry TABLES only. Scanning the whole document
+# flags design-only sketches elsewhere (section 6 names VAC_ParentPrevSlot,
+# VAC_ParentWeak, VAC_TimelyEquivExists, none of which are implemented or
+# claimed to be) as stale registry entries. Those are proposals, not records.
+done < <(sed -n '/^## §2 Probe and invariant registry/,/^## §[^2]/p' "$REG" \
+         | grep -oE '`(VAC_[A-Za-z0-9_]+|RVAC_[A-Za-z0-9_]+|S[0-9]_[A-Za-z0-9_]+|P[0-9][A-Za-z0-9_]*)`' \
          | tr -d '`' | sort -u)
 
 if [ "$missing" -eq 0 ] && [ "$stale" -eq 0 ]; then

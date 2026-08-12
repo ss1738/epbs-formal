@@ -3,6 +3,26 @@
 Engineering specification for the phase after `EPBSNodes.tla`. Every claim is
 tagged MEASURED (with the command that produced it), INFERRED, or OPEN.
 
+
+> ## ⚠ This document mixes implemented code with design sketches
+>
+> `V2_VERIFICATION_SPEC.md` contains both **measured results from operators that
+> exist** and **design skeletons for operators that do not**. Code blocks of the
+> second kind are marked `DESIGN ONLY — NOT IMPLEMENTED` directly above them.
+>
+> As of `f318ce3`, of 15 operators shown in `tla` blocks here:
+>
+> - **Implemented:** `AncClosure`, `HeadCertified`, `NodeInSubtree`,
+>   `ShouldApplyProposerBoost`, `VAC_BoostSuppressed`
+> - **Design only:** `IndInv`, `StructuralClosure`, `MonotoneHistory`,
+>   `StoreCoherence`, `SupportAgrees`, `AdversaryBudget`,
+>   `AdvProposerEquivocate`, `VAC_ParentPrevSlot`, `VAC_ParentWeak`,
+>   `VAC_TimelyEquivExists`
+>
+> `specs/` is the authority on what exists. `check_registry.sh` enforces that
+> every *implemented* checkable operator is registered in §2; it says nothing
+> about the sketches here.
+
 ---
 
 ## §0 Measured ground truth
@@ -617,6 +637,11 @@ instantiation.
 **Mandate M4 — memoize `AttScore`.** Carry `support \in [Ids -> [{EMPTY,FULL,PENDING} -> Int]]`
 updated incrementally in `AddAttestation`, so `Weight` is a lookup. Guard it with
 
+> ⚠ **DESIGN ONLY — NOT IMPLEMENTED.** The operator(s) below do not exist in
+> any `.tla` file. Running Apalache against them fails with `Operator ... not
+> found`, in about one second. That is a configuration error, not a tractability
+> result.
+
 ```tla
 SupportAgrees ==
     \A n \in AllNodes : support[n.root][n.ps] = AttScoreRef(n)
@@ -634,6 +659,11 @@ Target: `apalache-mc check --init=IndInv --inv=IndInv --length=1`. Success means
 the property holds at **unbounded** depth, which is the only route past the depth
 ceiling and the answer to the ESP review's multi-slot objection.
 
+> ⚠ **DESIGN ONLY — NOT IMPLEMENTED.** The operator(s) below do not exist in
+> any `.tla` file. Running Apalache against them fails with `Operator ... not
+> found`, in about one second. That is a configuration error, not a tractability
+> result.
+
 ```tla
 IndInv ==
     /\ TypeOK
@@ -647,6 +677,11 @@ IndInv ==
 ```
 
 ### §4.1 `StructuralClosure` — the tree is a tree
+
+> ⚠ **DESIGN ONLY — NOT IMPLEMENTED.** The operator(s) below do not exist in
+> any `.tla` file. Running Apalache against them fails with `Operator ... not
+> found`, in about one second. That is a configuration error, not a tractability
+> result.
 
 ```tla
 StructuralClosure ==
@@ -668,6 +703,11 @@ single most common CTI source in tree models. INFERRED.
 Induction has no memory of how a state was reached, so anything that only ever
 grows must be *stated* to only ever grow.
 
+> ⚠ **DESIGN ONLY — NOT IMPLEMENTED.** The operator(s) below do not exist in
+> any `.tla` file. Running Apalache against them fails with `Operator ... not
+> found`, in about one second. That is a configuration error, not a tractability
+> result.
+
 ```tla
 MonotoneHistory ==
     /\ \A v \in Validators : latestMsg[v].slot =< slot
@@ -687,6 +727,11 @@ one-state conjunct is the second most common CTI source here. INFERRED.
 
 This is the section the request asked for specifically. The four variables are
 not independent, and every missing relation below is a CTI generator.
+
+> ⚠ **DESIGN ONLY — NOT IMPLEMENTED.** The operator(s) below do not exist in
+> any `.tla` file. Running Apalache against them fails with `Operator ... not
+> found`, in about one second. That is a configuration error, not a tractability
+> result.
 
 ```tla
 StoreCoherence ==
@@ -726,6 +771,11 @@ PTC vote concerns a delivered payload, not read off a spec line. Verify against
 it; if false, the conjunct must be weakened or the CTI it prevents accepted.
 
 ### §4.4 `AdversaryBudget`
+
+> ⚠ **DESIGN ONLY — NOT IMPLEMENTED.** The operator(s) below do not exist in
+> any `.tla` file. Running Apalache against them fails with `Operator ... not
+> found`, in about one second. That is a configuration error, not a tractability
+> result.
 
 ```tla
 AdversaryBudget ==
@@ -792,6 +842,11 @@ than the protocol, and any attack found under it is a false positive of exactly
 the D1 kind. Note also condition 4's timeliness requirement: the adversary must
 equivocate *and* have the equivocation seen as timely by the PTC.
 
+> ⚠ **DESIGN ONLY — NOT IMPLEMENTED.** The operator(s) below do not exist in
+> any `.tla` file. Running Apalache against them fails with `Operator ... not
+> found`, in about one second. That is a configuration error, not a tractability
+> result.
+
 ```tla
 \* @type: () => Bool;
 ShouldApplyProposerBoost ==
@@ -824,6 +879,11 @@ and condition 3 depends on `is_head_weak`, which in v1 was measured to be
 
 **Mandate M5.** Before any property about `AdvProposerEquivocate` is reported,
 run a probe per conjunct *and* one for the conjunction:
+
+> ⚠ **DESIGN ONLY — NOT IMPLEMENTED.** The operator(s) below do not exist in
+> any `.tla` file. Running Apalache against them fails with `Operator ... not
+> found`, in about one second. That is a configuration error, not a tractability
+> result.
 
 ```tla
 VAC_ParentPrevSlot   == \A n \in AllNodes : blockSlot[blockParent[n.root]] + 1 # blockSlot[n.root]

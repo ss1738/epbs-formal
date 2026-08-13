@@ -86,6 +86,28 @@ AdversaryBudget ==
     /\ Cardinality(equivocators) =< MaxEquivocations
     /\ Cardinality(ByzValidators) * 3 < Cardinality(Validators)   \* < 1/3
 
+\* IndInv candidate conjunct (V2_VERIFICATION_SPEC.md §4.2). Checked for
+\* circularity before running, unlike the first pass on StructuralClosure:
+\* Init here uses CONCRETE assignments (payloadVerified = {}, equivocators = {},
+\* latestMsg = [... slot |-> 0 ...]), not the free-choice SUBSET/inequality style
+\* MCEPBSNodes.tla's Init uses, so none of these five conjuncts are Init
+\* preconditions restated. None concern only immutable constants either. Each is
+\* protected by a specific action guard on genuinely mutable state:
+\*   latestMsg[v].slot =< slot     -- Attest requires slot > latestMsg[v].slot
+\*                                    before the update; two-action claim, also
+\*                                    needs AdvanceSlot to never decrease slot.
+\*   latestMsg[v].root \in blocks  -- Attest requires b \in blocks
+\*   payloadVerified \subseteq blocks -- RevealPayload requires b \in blocks
+\*   equivocators \subseteq ByzValidators -- AdvEquivocate requires v \in ByzValidators
+\*   blockSlot[b] =< slot          -- ProposeBlock sets blockSlot[b] := slot
+\* All five are real transition-system claims, not restatements.
+MonotoneHistory ==
+    /\ \A v \in Validators : latestMsg[v].slot =< slot
+    /\ \A v \in Validators : latestMsg[v].root \in blocks
+    /\ payloadVerified \subseteq blocks
+    /\ equivocators \subseteq ByzValidators
+    /\ \A b \in blocks : blockSlot[b] =< slot
+
 \* Block-level attestation margin. Uses AttScore on the PENDING node, NOT
 \* Weight, for two reasons. First, Weight is zeroed by
 \* is_previous_slot_payload_decision exactly in the window where the payload

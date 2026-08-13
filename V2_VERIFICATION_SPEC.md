@@ -526,6 +526,91 @@ If `NextP1b` also fails to return, P1b is reported **unresolved at reachable
 depth** — antecedent needs ≥7 steps, search does not complete — which is a
 finding about tractability, not a protocol claim.
 
+### §1.14 `NextP1b` at length 7: two silent kills, tractability unresolved
+
+Two independent attempts to check `P1b_NoBlockReorgUnderBudget` at length 7 on
+`NextP1b` (5 validators, 1 Byzantine, bound 4, `-Xmx12g`), both terminated by an
+unexplained external kill rather than a normal Apalache exit.
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| Elapsed at death | 4h15m41s | 2h19m18s |
+| Where | mid-check, State 5, **second** branch (first branch at State 5 had already held clean) | mid-check, State 5, **first** branch (never reached a `holds`) |
+| `caffeinate -i` | no | yes |
+| Log signature | cuts off with no exception, no `OutOfMemoryError`, no verdict | identical |
+| RSS at death | last polled 4.3–5.6 GB, well under the 12 GB ceiling | last polled ~4.8 GB |
+
+**What this rules out, by direct comparison rather than inference:**
+
+- **A fixed-duration timeout or launchd watchdog.** The two elapsed times differ
+  by a factor of 1.8. A fixed policy would kill both runs at the same wall-clock
+  age.
+- **Idle sleep.** Run 2 ran under `caffeinate -i`, which blocks idle sleep
+  specifically, and died anyway. `pmset -g` also showed `sleep 0 (sleep
+  prevented by powerd)` system-wide during run 1's death window.
+- **JVM-level OOM.** Neither log contains `OutOfMemoryError`; RSS was never
+  observed near 12 GB in the minutes before either death.
+- **CPU ulimit, a wrapper-imposed timeout, or a kernel-logged kill/jetsam
+  event.** All checked directly on Mini-3 and absent.
+
+**What is NOT ruled out, and is the closest thing to a pattern:** both deaths
+occurred during State-5 invariant checking, not during a transition search or at
+any other depth. That is suggestive — something about the SMT query shape at
+this depth may correlate with whatever kills the process — but it is not proof:
+the two deaths hit different branches within that depth (run 1's second check,
+run 2's first), so "the exact same query kills it" is not established, only
+"something in this depth's query family does."
+
+**Remaining candidate, untested:** processes launched via `nohup ... &` over SSH
+are not immune to macOS terminating all processes tied to a login/audit session
+when that session is judged idle or torn down, even with `disown`. A `launchd`
+job would rule this in or out, at a cost of another several hours with no
+guaranteed result. Not run — see §1.15.
+
+**Tooling defect found while investigating:** the wrapper's exit-code capture
+was wrong.
+
+```bash
+echo "elapsed=$(( $(date +%s) - S ))s exitcode=$?"
+```
+
+`$(date +%s)` runs as part of constructing this string, and any command that
+runs overwrites `$?` before it is read later in the same statement. The printed
+`exitcode=0` on run 2 reflects `date`'s exit status, not `apalache-mc`'s, and
+must not be read as evidence of a clean exit. Correct form, if this is run
+again: capture `$?` into a variable immediately after the command it measures,
+before any other command runs.
+
+```bash
+apalache-mc check ... ; EC=$?; echo "elapsed=... exitcode=$EC"
+```
+
+**Status: P1b remains UNPROVEN.** No violation was found through State 5 on
+either attempt — real evidence, though partial. Depths 6 and 7 were never
+reached. The cause of both terminations is unidentified. This is recorded as a
+tractability finding, not a protocol finding: nothing here says anything about
+Gloas, only about the limits of checking this property this way on this
+hardware.
+
+### §1.15 What was deliberately not done
+
+- **A third blind `nohup` retry.** Two runs disagreeing on elapsed time already
+  ruled out the timeout and idle-sleep hypotheses; a third run under the same
+  launch method would add a data point without a controlled variable to learn
+  from.
+- **A `launchd`-based run testing the session-teardown hypothesis.** Sound as an
+  experiment, but several more hours for, at best, a single `NextP1b` result
+  under the restricted (`PtcVote`/`DaVote`-dropped) adversary — not a proof of
+  the real property. Not run.
+- **A "minimal" `IndInv` built around an undefined `SupportDominance`
+  conjunct.** Naming an operator is not defining one. A real inductive
+  invariant needs each conjunct derived from spec text, typechecked, and
+  expected to need its own fixes — §4's skeleton already required exactly that
+  kind of correction for `HeadCertified`, and `NextP1b` itself needed two
+  independent fixes (`PtcVote`/`DaVote` restoration, the `HeadBlockStrong`
+  absolute-threshold fix) before it tested anything real. Writing `IndInv`
+  correctly is separate, scoped work, not a same-session pivot.
+
 ### §1.5 What `EPBSNodes.tla` does NOT establish
 
 Stated because a complete green suite invites the opposite conclusion.

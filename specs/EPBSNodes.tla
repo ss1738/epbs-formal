@@ -492,6 +492,23 @@ AncClosure ==
             nodeAnc[b] = nodeAnc[blockParent[b]]
                          \union { [root |-> blockParent[b], ps |-> parentStatus[b]] }
 
+\* IndInv candidate conjunct (V2_VERIFICATION_SPEC.md §4.1), implemented from its
+\* design-only skeleton rather than left as a name. "The tree is a tree": every
+\* non-genesis block's declared parent exists and precedes it in slot, its
+\* ancestry matches AncClosure, and every ancestor chain bottoms out at Genesis
+\* -- so blockParent has no cycles and the walk any ancestor-set encodes always
+\* terminates. The first two conjuncts are ALSO enforced structurally by
+\* ProposeBlock's preconditions (EPBSMultiSlotV2.tla) -- this is what makes that
+\* claim checkable instead of merely argued from reading the action.
+StructuralClosure ==
+    /\ Genesis \in blocks
+    /\ blockSlot[Genesis] = 0
+    /\ \A b \in blocks : b # Genesis =>
+         /\ blockParent[b] \in blocks
+         /\ blockSlot[blockParent[b]] < blockSlot[b]
+    /\ AncClosure
+    /\ \A b \in blocks : Genesis \in {a.root : a \in nodeAnc[b]} \/ b = Genesis
+
 \* Each root appears at most once as an ancestor. This is what makes matching on
 \* root equivalent to get_ancestor's matching on slot, and it must hold for
 \* NodeInSubtree to be a faithful transcription rather than an approximation.

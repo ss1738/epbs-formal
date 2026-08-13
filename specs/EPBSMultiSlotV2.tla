@@ -108,6 +108,42 @@ MonotoneHistory ==
     /\ equivocators \subseteq ByzValidators
     /\ \A b \in blocks : blockSlot[b] =< slot
 
+\* IndInv candidate conjunct (V2_VERIFICATION_SPEC.md §4.3), the four-variable
+\* interaction. TWO of the skeleton's five sub-claims are circular and are
+\* EXCLUDED from the tested formula below, not included-and-expected-to-pass:
+\*
+\*   (c) ShouldExtendPayload(b) => b \in payloadVerified. Trivially true --
+\*       ShouldExtendPayload(r) has `r \in payloadVerified` as one of its own
+\*       conjuncts (EPBSNodes.tla). Testing a predicate against a condition it
+\*       already requires of itself cannot fail.
+\*
+\*   (e) boostApplies = ShouldApplyProposerBoost. Circular against Next itself:
+\*       Derived', called as a postcondition by all seven actions, already
+\*       asserts exactly this equality in every successor state.
+\*
+\* Both remain necessary conjuncts of the eventual IndInv -- they are real,
+\* just not informative to test here, since neither could ever be observed to
+\* fail.
+\*
+\* (a) is exactly S6_FullImpliesVerified (EPBSNodes.tla); referenced, not
+\* duplicated. (b)'s payloadVerified conjunct is isolated as its own operator so
+\* a CTI, if any, identifies which claim broke -- and because unlike (c)/(e) it
+\* is NOT definitionally guaranteed, only plausibly protected by PtcVote's guard
+\* plus payloadVerified's monotonicity (verified: only ever grows, via \union in
+\* RevealPayload, no other assignment site). That is a claim about THIS MODEL,
+\* not about Gloas -- whether on_payload_attestation_message actually requires
+\* this remains the open question §4.3 already flagged, unaffected by what this
+\* model's PtcVote guard happens to enforce.
+PtcTimelyImpliesVerified == ptcTimely \subseteq payloadVerified
+
+StoreCoherence ==
+    /\ S6_FullImpliesVerified
+    /\ ptcTimely   \subseteq blocks
+    /\ daAvailable \subseteq blocks
+    /\ PtcTimelyImpliesVerified
+    /\ boostRoot \in blocks \union {0}
+    /\ boostRoot # 0 => blockSlot[boostRoot] = slot
+
 \* Block-level attestation margin. Uses AttScore on the PENDING node, NOT
 \* Weight, for two reasons. First, Weight is zeroed by
 \* is_previous_slot_payload_decision exactly in the window where the payload

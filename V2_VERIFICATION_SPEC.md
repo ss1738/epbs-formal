@@ -15,9 +15,10 @@ tagged MEASURED (with the command that produced it), INFERRED, or OPEN.
 > - **Implemented:** `AncClosure`, `HeadCertified`, `NodeInSubtree`,
 >   `ShouldApplyProposerBoost`, `VAC_BoostSuppressed`, `StructuralClosure`
 >   (2026-08-13), `AdversaryBudget` (2026-08-13), `MonotoneHistory`
->   (2026-08-13, see §1.18)
-> - **Design only:** `IndInv`,
->   `StoreCoherence`, `SupportAgrees`,
+>   (2026-08-13), `StoreCoherence` and `PtcTimelyImpliesVerified`
+>   (2026-08-13, see §1.19 — partial: two of five sub-claims excluded as
+>   circular-by-definition, not tested)
+> - **Design only:** `IndInv`, `SupportAgrees`,
 >   `AdvProposerEquivocate`, `VAC_ParentPrevSlot`, `VAC_ParentWeak`,
 >   `VAC_TimelyEquivExists`
 >
@@ -748,6 +749,82 @@ step.
 coupling — and is expected to be the most expensive and the most likely to
 surface a real CTI.
 
+### §1.19 `StoreCoherence` implemented and tested — two circular sub-claims caught before running
+
+Fourth conjunct, and the first where circularity screening caught something
+*inside a predicate's own definition*, not just against `Init` or `Derived'`.
+
+**Implemented** in `specs/EPBSMultiSlotV2.tla`, next to `MonotoneHistory`.
+**Not** a verbatim copy of the §4.3 skeleton — two of its five sub-claims are
+excluded from the tested formula, with the reason stated in the source:
+
+- **(c)** `ShouldExtendPayload(b) => b \in payloadVerified` is trivially true:
+  `ShouldExtendPayload(r)` has `r \in payloadVerified` as one of its own
+  conjuncts (`EPBSNodes.tla`). Testing a predicate against a condition it
+  already requires of itself cannot fail.
+- **(e)** `boostApplies = ShouldApplyProposerBoost` is circular against `Next`
+  itself: `Derived'`, called as a postcondition by all seven actions, already
+  asserts exactly this equality in every successor state.
+
+Both remain necessary conjuncts of the eventual `IndInv` — real, just not
+informative to test in isolation, since neither could ever be observed to fail.
+
+**(a)** is exactly `S6_FullImpliesVerified` (`EPBSNodes.tla`) — referenced, not
+duplicated; this is its first test under `Next` rather than only the static
+algebra. **(b)**'s `ptcTimely ⊆ payloadVerified` sub-claim is isolated as its own
+operator, `PtcTimelyImpliesVerified`, per the same reasoning as before: unlike
+(c) and (e) it is not definitionally guaranteed, only *plausibly* protected by
+`PtcVote`'s guard (`b \in payloadVerified` required before the union) plus
+`payloadVerified`'s confirmed monotonicity (only ever grows, via `\union` in
+`RevealPayload` — verified, no other assignment site exists). That plausibility
+was a prediction, not yet a fact, so it was tested rather than assumed.
+
+**Distinction preserved deliberately:** whether this model's `PtcVote` guard
+mechanically enforces `ptcTimely ⊆ payloadVerified` is a different question from
+whether Gloas's real `on_payload_attestation_message` requires it. The latter is
+still the open, INFERRED question §4.3 already flagged — a model-level HOLDS
+here does not close it.
+
+```tla
+StoreCoherence ==
+    /\ S6_FullImpliesVerified
+    /\ ptcTimely   \subseteq blocks
+    /\ daAvailable \subseteq blocks
+    /\ PtcTimelyImpliesVerified
+    /\ boostRoot \in blocks \union {0}
+    /\ boostRoot # 0 => blockSlot[boostRoot] = slot
+```
+
+**Test**, same configuration as the prior three:
+
+```
+Checker reports no error up to computation length 3
+Total time: 996.736 sec  (16m36s)
+```
+
+**HOLDS.** `exitcode=0` trustworthy.
+
+**Operational note:** SSH to Mini-3 dropped mid-run (Tailscale-level flapping,
+not a machine restart — `uptime` on reconnect showed 1 day 20h48m continuous).
+The `nohup`+`disown` launch pattern survived it without incident; the process
+ran to completion and the log was intact on reconnect.
+
+**Cost note:** fastest of the four real conjuncts (16m36s vs.
+`MonotoneHistory`'s 21m46s, `AdversaryBudget`'s 28m23s, `StructuralClosure`'s
+34m12s) — consistent with having excluded the two most expensive-looking parts
+of the original skeleton (the `ShouldExtendPayload` disjunction chain,
+`ShouldApplyProposerBoost`'s `IsHeadWeak`/`AttScore` machinery) before running,
+not with the invariant being intrinsically cheap.
+
+**Scope, same caveat as §1.16–1.18:** bounded to length 3, not the inductive
+step, and now additionally: two conjuncts of the original design are
+permanently excluded from any bounded test, since testing them is meaningless
+regardless of bound. They must still be included when `IndInv` is finally
+assembled — they are needed premises even though no experiment can exercise
+them.
+
+**Remaining design-only:** `IndInv` itself, `SupportAgrees`.
+
 ### §1.5 What `EPBSNodes.tla` does NOT establish
 
 Stated because a complete green suite invites the opposite conclusion.
@@ -1208,6 +1285,8 @@ Run as `apalache-mc check --cinit=ConstInit --init=Init --next=<N> --inv=<name> 
 | `StructuralClosure` | invariant | tree well-formedness + Genesis-reachability | HOLDS | see §1.16 |
 | `AdversaryBudget` | invariant | equivocator count bounded + Byzantine minority | HOLDS | see §1.17 |
 | `MonotoneHistory` | invariant | latestMsg/blockSlot never exceed current slot, payloadVerified/equivocators subset claims | HOLDS | see §1.18 |
+| `StoreCoherence` | invariant | 4-variable store interaction (partial: 2 of 5 sub-claims excluded, circular by definition) | HOLDS | see §1.19 |
+| `PtcTimelyImpliesVerified` | invariant (isolated) | ptcTimely subset of payloadVerified | HOLDS | see §1.19 |
 | `VAC_DaAvailableNonEmpty` | probe | `daAvailable` is writable (#13 guard) | VIOLATED | VIOLATED len 3, 18 s |
 | `VAC_BothPtcAndDa` | probe | one block in both sets | VIOLATED | VIOLATED len 4, 144 s |
 | `VAC_P3_WindowReachable` | probe | the PTC-decisive window is entered | VIOLATED | VIOLATED len 5, 56 s |

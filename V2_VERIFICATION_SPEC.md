@@ -14,9 +14,9 @@ tagged MEASURED (with the command that produced it), INFERRED, or OPEN.
 >
 > - **Implemented:** `AncClosure`, `HeadCertified`, `NodeInSubtree`,
 >   `ShouldApplyProposerBoost`, `VAC_BoostSuppressed`, `StructuralClosure`
->   (2026-08-13, see §1.16)
+>   (2026-08-13), `AdversaryBudget` (2026-08-13, see §1.17)
 > - **Design only:** `IndInv`, `MonotoneHistory`,
->   `StoreCoherence`, `SupportAgrees`, `AdversaryBudget`,
+>   `StoreCoherence`, `SupportAgrees`,
 >   `AdvProposerEquivocate`, `VAC_ParentPrevSlot`, `VAC_ParentWeak`,
 >   `VAC_TimelyEquivExists`
 >
@@ -661,6 +661,48 @@ it.
 implemented for real, tested against the smallest question first, checked for
 circularity before its result is trusted.
 
+### §1.17 `AdversaryBudget` implemented and tested — second real conjunct
+
+Same treatment as `StructuralClosure`: implemented for real, circularity
+identified *before* running rather than after.
+
+**Implemented** in `specs/EPBSMultiSlotV2.tla`, next to `AdversaryCapacity`,
+unchanged from the §4.4 skeleton.
+
+**Flagged before running, not discovered after:** `AdversaryBudget`'s second
+conjunct — `Cardinality(ByzValidators) * 3 < Cardinality(Validators)` — concerns
+only `CONSTANTS`, never primed by any action. It is decided once at `ConstInit`
+and cannot be affected by `Next`. Testing it is the same circularity
+`StructuralClosure`'s first four conjuncts had against `Init`. Included in the
+operator because both conjuncts are needed together for the adversary-budget
+argument `IndInv` will eventually make, but only the first conjunct —
+`Cardinality(equivocators) =< MaxEquivocations` — is a live transition-system
+claim, protected by `AdvEquivocate`'s guard (`Cardinality(equivocators) <
+MaxEquivocations`, strict, checked before the union) and by no other action
+touching `equivocators`.
+
+**Test**, same configuration as `StructuralClosure` for direct comparison —
+`MCEPBSMultiSlotV2.tla`, concrete `Init`, full `Next`, `--length=3`, 5
+validators, bound 4:
+
+```
+Checker reports no error up to computation length 3
+Total time: 1703.314 sec  (28m23s)
+```
+
+**HOLDS.** `exitcode=0` is trustworthy this time — the wrapper bug from §1.14
+(`$?` overwritten by an intervening `date` call) is fixed; `EC` is now captured
+immediately after the measured command.
+
+**Cost prediction confirmed:** 28m23s vs. `StructuralClosure`'s 34m12s — close,
+supporting the reading that check cost tracks the size of `Next`'s exploration
+at this validator count, not the syntactic complexity of the invariant. First
+cost prediction of the session that actually landed rather than being wrong.
+
+**Scope, same caveat as §1.16:** bounded to length 3, not the inductive step.
+
+**Remaining design-only:** `MonotoneHistory`, `StoreCoherence`, `SupportAgrees`.
+
 ### §1.5 What `EPBSNodes.tla` does NOT establish
 
 Stated because a complete green suite invites the opposite conclusion.
@@ -1120,6 +1162,7 @@ Run as `apalache-mc check --cinit=ConstInit --init=Init --next=<N> --inv=<name> 
 | `RVAC_HeadMoved` | probe | the head moves off genesis | VIOLATED | VIOLATED len 3, 3 s |
 | `VAC_PtcTimelyNonEmpty` | probe | `ptcTimely` is writable (#13 guard) | VIOLATED | VIOLATED len 3, 16 s |
 | `StructuralClosure` | invariant | tree well-formedness + Genesis-reachability | HOLDS | see §1.16 |
+| `AdversaryBudget` | invariant | equivocator count bounded + Byzantine minority | HOLDS | see §1.17 |
 | `VAC_DaAvailableNonEmpty` | probe | `daAvailable` is writable (#13 guard) | VIOLATED | VIOLATED len 3, 18 s |
 | `VAC_BothPtcAndDa` | probe | one block in both sets | VIOLATED | VIOLATED len 4, 144 s |
 | `VAC_P3_WindowReachable` | probe | the PTC-decisive window is entered | VIOLATED | VIOLATED len 5, 56 s |

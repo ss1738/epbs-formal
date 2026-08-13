@@ -34,7 +34,7 @@ for f in "${SPECS[@]}"; do
       echo "  UNREGISTERED  $op   ($f)"
       missing=$((missing + 1))
     fi
-  done < <(grep -oE '^(VAC_[A-Za-z0-9_]+|RVAC_[A-Za-z0-9_]+|S[0-9]_[A-Za-z0-9_]+|P[0-9][A-Za-z0-9_]*|TypeOK|AncClosure|AncRootsUnique|StructuralClosure)\b' "$f" \
+  done < <(grep -oE '^(VAC_[A-Za-z0-9_]+|RVAC_[A-Za-z0-9_]+|S[0-9]_[A-Za-z0-9_]+|P[0-9][A-Za-z0-9_]*|TypeOK|AncClosure|AncRootsUnique|StructuralClosure|AdversaryBudget)\b' "$f" \
            | sort -u)
 done
 

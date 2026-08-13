@@ -65,6 +65,27 @@ Derived ==
 
 AdversaryCapacity == Cardinality(ByzValidators) + ProposerBoost
 
+\* IndInv candidate conjunct (V2_VERIFICATION_SPEC.md §4.4), implemented from its
+\* design-only skeleton. Two conjuncts of different character, deliberately kept
+\* together because both are needed for the adversary-budget reasoning even
+\* though only one is a live test:
+\*
+\*   1. Cardinality(equivocators) =< MaxEquivocations -- protected by
+\*      AdvEquivocate's guard (Cardinality(equivocators) < MaxEquivocations,
+\*      strict, before the union) and by no other action touching equivocators.
+\*      This IS a real claim about the transition relation.
+\*
+\*   2. Cardinality(ByzValidators) * 3 < Cardinality(Validators) -- entirely
+\*      about CONSTANTS, never primed by any action. Decided once at ConstInit,
+\*      true or false for the whole run. Testing whether Next preserves it is
+\*      the same circularity StructuralClosure's first four conjuncts had
+\*      against Init: it cannot fail because nothing can change it. Included
+\*      for what it's used for (bounding the adversary in IndInv), not as a
+\*      transition-system claim.
+AdversaryBudget ==
+    /\ Cardinality(equivocators) =< MaxEquivocations
+    /\ Cardinality(ByzValidators) * 3 < Cardinality(Validators)   \* < 1/3
+
 \* Block-level attestation margin. Uses AttScore on the PENDING node, NOT
 \* Weight, for two reasons. First, Weight is zeroed by
 \* is_previous_slot_payload_decision exactly in the window where the payload

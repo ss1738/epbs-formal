@@ -13,8 +13,9 @@ tagged MEASURED (with the command that produced it), INFERRED, or OPEN.
 > As of `f318ce3`, of 15 operators shown in `tla` blocks here:
 >
 > - **Implemented:** `AncClosure`, `HeadCertified`, `NodeInSubtree`,
->   `ShouldApplyProposerBoost`, `VAC_BoostSuppressed`
-> - **Design only:** `IndInv`, `StructuralClosure`, `MonotoneHistory`,
+>   `ShouldApplyProposerBoost`, `VAC_BoostSuppressed`, `StructuralClosure`
+>   (2026-08-13, see §1.16)
+> - **Design only:** `IndInv`, `MonotoneHistory`,
 >   `StoreCoherence`, `SupportAgrees`, `AdversaryBudget`,
 >   `AdvProposerEquivocate`, `VAC_ParentPrevSlot`, `VAC_ParentWeak`,
 >   `VAC_TimelyEquivExists`
@@ -611,6 +612,55 @@ hardware.
   absolute-threshold fix) before it tested anything real. Writing `IndInv`
   correctly is separate, scoped work, not a same-session pivot.
 
+### §1.16 `StructuralClosure` implemented and tested — first real `IndInv` building block
+
+Following "yes go" back to small steps after the mega-prompt/`SupportSticky`
+detour: picked the cheapest untested conjunct of the §4 `IndInv` skeleton and
+actually implemented it, rather than sketching another name.
+
+**Implemented** in `specs/EPBSNodes.tla`, next to `AncClosure`, unchanged from
+the skeleton in §4.1.
+
+**First test was circular, caught before being reported as a result.** Checked
+against `MCEPBSNodes.tla`'s free-choice `Init` (`--length=0`): HOLDS, 101s. But
+inspecting `Init` showed four of `StructuralClosure`'s five conjuncts —
+`Genesis \in blocks`, `blockSlot[Genesis] = 0`, the parent-in-blocks/slot-order
+conjunct, and `AncClosure` itself — are asserted **directly as `Init`
+constraints** (`MCEPBSNodes.tla` lines 33–42, 61). Testing them against `Init`
+could not fail; it restates the admission rule back at itself. Only the fifth
+conjunct (every ancestor chain reaches Genesis) is a non-trivial consequence,
+provable by induction on `blockParent`'s strict decrease to its one fixed point.
+This HOLDS was not reported as a finding for that reason.
+
+**The real test:** does `StructuralClosure` survive actual transitions.
+`MCEPBSMultiSlotV2.tla`, concrete genesis-only `Init`, full `Next` (all seven
+actions including `AdvEquivocate`), `--length=3`, 5 validators, bound 4:
+
+```
+Checker reports no error up to computation length 3
+Total time: 2052.486 sec  (34m12s)
+```
+
+**HOLDS.** This is not circular: `Init` here is concrete, so the content of the
+check is whether `ProposeBlock`'s parent/slot bookkeeping and `nodeAnc`'s update
+actually maintain well-formedness as the tree grows under real actions.
+
+**Scope, stated precisely:** this is bounded verification to length 3, not proof
+of the inductive step. It shows `StructuralClosure` survived the traces explored
+in that bound; it does not show `StructuralClosure /\ Next => StructuralClosure'`
+for every reachable state, which is what would actually be needed as an `IndInv`
+conjunct and is the next real test once more conjuncts exist to test alongside
+it.
+
+**Registered** in `check_registry.sh`'s explicit allowlist (alongside `TypeOK`,
+`AncClosure`, `AncRootsUnique`) and in §2's table. Moved from "design only" to
+"implemented" in the header inventory.
+
+**Not yet done:** `MonotoneHistory`, `StoreCoherence`, `SupportAgrees`,
+`AdversaryBudget` remain design-only. Each needs the same treatment —
+implemented for real, tested against the smallest question first, checked for
+circularity before its result is trusted.
+
 ### §1.5 What `EPBSNodes.tla` does NOT establish
 
 Stated because a complete green suite invites the opposite conclusion.
@@ -763,10 +813,8 @@ IndInv ==
 
 ### §4.1 `StructuralClosure` — the tree is a tree
 
-> ⚠ **DESIGN ONLY — NOT IMPLEMENTED.** The operator(s) below do not exist in
-> any `.tla` file. Running Apalache against them fails with `Operator ... not
-> found`, in about one second. That is a configuration error, not a tractability
-> result.
+**Implemented 2026-08-13** in `specs/EPBSNodes.tla`, next to `AncClosure`. See
+§1.16 for the derivation and the first measured result.
 
 ```tla
 StructuralClosure ==
@@ -1071,6 +1119,7 @@ Run as `apalache-mc check --cinit=ConstInit --init=Init --next=<N> --inv=<name> 
 | `RVAC_Attested` | probe | `Attest` fires | VIOLATED | VIOLATED len 2, 30 s |
 | `RVAC_HeadMoved` | probe | the head moves off genesis | VIOLATED | VIOLATED len 3, 3 s |
 | `VAC_PtcTimelyNonEmpty` | probe | `ptcTimely` is writable (#13 guard) | VIOLATED | VIOLATED len 3, 16 s |
+| `StructuralClosure` | invariant | tree well-formedness + Genesis-reachability | HOLDS | see §1.16 |
 | `VAC_DaAvailableNonEmpty` | probe | `daAvailable` is writable (#13 guard) | VIOLATED | VIOLATED len 3, 18 s |
 | `VAC_BothPtcAndDa` | probe | one block in both sets | VIOLATED | VIOLATED len 4, 144 s |
 | `VAC_P3_WindowReachable` | probe | the PTC-decisive window is entered | VIOLATED | VIOLATED len 5, 56 s |

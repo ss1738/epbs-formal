@@ -14,8 +14,9 @@ tagged MEASURED (with the command that produced it), INFERRED, or OPEN.
 >
 > - **Implemented:** `AncClosure`, `HeadCertified`, `NodeInSubtree`,
 >   `ShouldApplyProposerBoost`, `VAC_BoostSuppressed`, `StructuralClosure`
->   (2026-08-13), `AdversaryBudget` (2026-08-13, see §1.17)
-> - **Design only:** `IndInv`, `MonotoneHistory`,
+>   (2026-08-13), `AdversaryBudget` (2026-08-13), `MonotoneHistory`
+>   (2026-08-13, see §1.18)
+> - **Design only:** `IndInv`,
 >   `StoreCoherence`, `SupportAgrees`,
 >   `AdvProposerEquivocate`, `VAC_ParentPrevSlot`, `VAC_ParentWeak`,
 >   `VAC_TimelyEquivExists`
@@ -703,6 +704,50 @@ cost prediction of the session that actually landed rather than being wrong.
 
 **Remaining design-only:** `MonotoneHistory`, `StoreCoherence`, `SupportAgrees`.
 
+### §1.18 `MonotoneHistory` implemented and tested — third conjunct, no circularity
+
+Same treatment, third conjunct. Screened for circularity *before* running this
+time, and found none — a first for this batch.
+
+**Implemented** in `specs/EPBSMultiSlotV2.tla`, next to `AdversaryBudget`,
+unchanged from the §4.2 skeleton.
+
+**Why no circularity, unlike the first two:** `MCEPBSMultiSlotV2.tla`'s `Init`
+uses concrete assignments (`payloadVerified = {}`, `equivocators = {}`,
+`latestMsg = [... slot |-> 0 ...]`), not the free-choice `\in SUBSET`/inequality
+style `MCEPBSNodes.tla`'s `Init` uses — so none of the five conjuncts are `Init`
+preconditions restated. None concern only immutable constants. Each is
+protected by a specific action guard on mutable state: `Attest` requires
+`slot > latestMsg[v].slot` and `b \in blocks`; `RevealPayload` requires
+`b \in blocks`; `AdvEquivocate` requires `v \in ByzValidators`; `ProposeBlock`
+sets `blockSlot[b] := slot`. All five are genuine transition-system claims.
+
+**Test**, same configuration as the prior two —
+`MCEPBSMultiSlotV2.tla`, concrete `Init`, full `Next`, `--length=3`, 5
+validators, bound 4:
+
+```
+Checker reports no error up to computation length 3
+Total time: 1306.43 sec  (21m46s)
+```
+
+**HOLDS.** `exitcode=0` trustworthy (wrapper fix from §1.14 still in effect).
+
+**Cost note, stated carefully:** fastest of the three so far (21m46s vs.
+`AdversaryBudget`'s 28m23s and `StructuralClosure`'s 34m12s), despite having no
+circular conjuncts to "coast" on — the opposite of what a naive read of §1.13's
+cost table might predict. Not enough data to claim why; recorded as observation,
+not explanation.
+
+**Scope, same caveat as §1.16–1.17:** bounded to length 3, not the inductive
+step.
+
+**Remaining design-only:** `IndInv` itself, `StoreCoherence`, `SupportAgrees`.
+`StoreCoherence` is the one that matters most for P1b — it involves
+`ShouldExtendPayload` and `ShouldApplyProposerBoost`, the PTC/fork-choice
+coupling — and is expected to be the most expensive and the most likely to
+surface a real CTI.
+
 ### §1.5 What `EPBSNodes.tla` does NOT establish
 
 Stated because a complete green suite invites the opposite conclusion.
@@ -878,10 +923,9 @@ single most common CTI source in tree models. INFERRED.
 Induction has no memory of how a state was reached, so anything that only ever
 grows must be *stated* to only ever grow.
 
-> ⚠ **DESIGN ONLY — NOT IMPLEMENTED.** The operator(s) below do not exist in
-> any `.tla` file. Running Apalache against them fails with `Operator ... not
-> found`, in about one second. That is a configuration error, not a tractability
-> result.
+**Implemented 2026-08-13** in `specs/EPBSMultiSlotV2.tla`, next to
+`AdversaryBudget`. See §1.18 — unlike the first two conjuncts, no circularity
+was found; all five are genuine transition-system claims.
 
 ```tla
 MonotoneHistory ==
@@ -1163,6 +1207,7 @@ Run as `apalache-mc check --cinit=ConstInit --init=Init --next=<N> --inv=<name> 
 | `VAC_PtcTimelyNonEmpty` | probe | `ptcTimely` is writable (#13 guard) | VIOLATED | VIOLATED len 3, 16 s |
 | `StructuralClosure` | invariant | tree well-formedness + Genesis-reachability | HOLDS | see §1.16 |
 | `AdversaryBudget` | invariant | equivocator count bounded + Byzantine minority | HOLDS | see §1.17 |
+| `MonotoneHistory` | invariant | latestMsg/blockSlot never exceed current slot, payloadVerified/equivocators subset claims | HOLDS | see §1.18 |
 | `VAC_DaAvailableNonEmpty` | probe | `daAvailable` is writable (#13 guard) | VIOLATED | VIOLATED len 3, 18 s |
 | `VAC_BothPtcAndDa` | probe | one block in both sets | VIOLATED | VIOLATED len 4, 144 s |
 | `VAC_P3_WindowReachable` | probe | the PTC-decisive window is entered | VIOLATED | VIOLATED len 5, 56 s |
